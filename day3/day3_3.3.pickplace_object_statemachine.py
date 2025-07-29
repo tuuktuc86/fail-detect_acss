@@ -13,15 +13,6 @@ from torchvision.transforms import functional as F
 import gymnasium as gym
 from collections.abc import Sequence
 import open3d as o3d
-orig_draw = o3d.visualization.draw_geometries
-
-def hooked_draw(*args, **kwargs):
-    print(">>> open3d draw_geometries CALLED")
-    import traceback
-    traceback.print_stack(limit=5)   # 호출 위치 추적
-    return orig_draw(*args, **kwargs)
-
-o3d.visualization.draw_geometries = hooked_draw
 # o3d.visualization.Visualizer().destroy_window() #rendering X 
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -191,6 +182,28 @@ def CLIP_transform(img_tensor, output_size, fill=0, padding_mode='constant'):
                                  std=[0.26862954, 0.26130258, 0.27577711])
     
     return normalized_img
+
+from PIL import Image
+# trajectory 끝난 후 log_dir 안의 front_view_* 이미지를 gif로 묶기
+def make_gif_from_images(image_dir, pattern="front_view_*.png", gif_name="trajectory.gif", duration=200):
+    # 저장된 이미지 경로 정렬
+    frames = []
+    imgs = sorted(glob.glob(os.path.join(image_dir, pattern)))
+    for img_path in imgs:
+        frame = Image.open(img_path)
+        frames.append(frame)
+
+    if frames:
+        frames[0].save(
+            os.path.join(image_dir, gif_name),
+            save_all=True,
+            append_images=frames[1:],
+            duration=duration,   # frame 간격(ms)
+            loop=0              # 0이면 무한 반복
+        )
+        print(f"[INFO] GIF saved at {os.path.join(image_dir, gif_name)}")
+    else:
+        print("[WARNING] No images found for GIF creation.")
 
 
 class GripperState:
@@ -400,6 +413,16 @@ class PickAndPlaceSm:
             elif state == PickAndPlaceSmState.MOVE_TO_BIN:
                 # 목표 end-effector 자세 및 그리퍼 상태 정의
                 self.des_ee_pose[i] = self.bin_pose[i]
+
+                # ##[failcase 1] change mis put to bin 
+                # self.test_noise = torch.tensor([
+                #     np.random.uniform(-0.7, 0.1),  
+                #     np.random.uniform(-0.7, 0.1), 
+                #     0.0
+                # ], device=self.bin_pose.device)
+                # self.des_ee_pose[i, :3] += self.test_noise    
+                # ## ----------------------
+
                 self.des_gripper_state[i] = GripperState.CLOSE
                 # 현재 state에서의 end-effector position을 저장
                 self.stack_ee_pose.append(ee_pos[i])
@@ -413,10 +436,11 @@ class PickAndPlaceSm:
                 # end-effector의 위치가 일정 step 이상 바뀌지 않을때, 다음 state 로 전환 및 state 시간 초기화
                 else:
                     if len(self.stack_ee_pose) > 50:
-                        if torch.linalg.norm(ee_pos[i] - self.stack_ee_pose[-30]) < self.position_threshold:
+                        if torch.linalg.norm(ee_pos[i] - self.stack_ee_pose[-30]) < self.position_threshold:                       
                             self.sm_state[i] = PickAndPlaceSmState.CLOSE
                             self.sm_wait_time[i] = 0.0
                             self.stack_ee_pose = []
+                self.position_threshold = 0.01
 
             elif state == PickAndPlaceSmState.LOWER:
                 # 목표 end-effector 자세 및 그리퍼 상태 정의
@@ -576,7 +600,7 @@ def main():
     # log_dir = f"simulation_logs_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     # os.makedirs(log_dir, exist_ok=True)    
     max_steps_per_traj=700
-    max_trajectories=100
+    max_trajectories=7
     total_traj = 0
     # 시뮬레이션 루프
     while simulation_app.is_running() and total_traj < max_trajectories:
@@ -801,7 +825,7 @@ def main():
                             
                             # rotation matrix를 사용하여 예측한 파지점의 offset 맞추기
                             z_axis = grasp_rot[:, 2]
-                            grasp_pos = pregrasp_pos + z_axis * 0.085
+                            grasp_pos = pregrasp_pos + z_axis * 0.085 # change : miss put point  
 
                             # 예측한 파지점 pose를 torch tensor로 변환
                             pregrasp_pose = np.concatenate([pregrasp_pos, grasp_quat])
@@ -908,7 +932,8 @@ def main():
         else:
             final_log_dir = f"{log_dir}_len{traj_length}_failure"
         os.rename(log_dir, final_log_dir)
-
+        make_gif_from_images(final_log_dir, pattern="front_view_*.png", gif_name="front_view.gif", duration=150)
+        
         print(f"[INFO] Trajectory {total_traj+1} saved at {final_log_dir}")
         total_traj += 1 
     # 환경 종료 및 시뮬레이션 종료
