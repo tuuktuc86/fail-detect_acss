@@ -65,22 +65,22 @@ class FrankaYCBPickPlaceEnvCfg(YCBPickPlaceEnvCfg):
             offset=CameraCfg.OffsetCfg(pos=(0.1, 0.035, 0.0), rot=(0.70710678, 0.0, 0.0, 0.70710678), convention="ros"),
         )
 
-        # 5. 두 번째 카메라 설정 (다른 각도나 위치)
+        # # 5. 두 번째 카메라 설정 (다른 각도나 위치)
         self.scene.camera2 = CameraCfg(
             prim_path="{ENV_REGEX_NS}/Robot/panda_hand/handeye_camera2", # 다른 prim 경로
             update_period=0.1,
-            height=640, width=640,
+            height=480, width=640,
             data_types=["rgb", "distance_to_image_plane"],
             spawn=PinholeCameraCfg(
                 focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 1.0e5)
             ),
             # 다른 위치/방향 오프셋 (예: 더 아래쪽을 보는 카메라)
             offset=CameraCfg.OffsetCfg(
-                pos=(0.05, 0.0, -0.03), 
+                pos=(0.05, 0.0, -0.03),
                 rot=(0.70710678, 0.0, 0.0, 0.70710678),  # 아래쪽 틸트
                 convention="ros"
             ),
-        )        
+        )     
         
         # 5. 엔드이펙터(EE) 프레임(좌표계) 설정 및 프레임 시각화 마커 세팅
         marker_cfg = FRAME_MARKER_CFG.copy()

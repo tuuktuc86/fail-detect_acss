@@ -576,7 +576,7 @@ def main():
     # log_dir = f"simulation_logs_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     # os.makedirs(log_dir, exist_ok=True)    
     max_steps_per_traj=700
-    max_trajectories=50
+    max_trajectories=100
     total_traj = 0
     # 시뮬레이션 루프
     while simulation_app.is_running() and total_traj < max_trajectories:
