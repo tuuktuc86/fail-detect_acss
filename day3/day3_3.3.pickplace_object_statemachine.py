@@ -415,12 +415,12 @@ class PickAndPlaceSm:
                 self.des_ee_pose[i] = self.bin_pose[i]
 
                 # ##[failcase 1] change mis put to bin 
-                # self.test_noise = torch.tensor([
-                #     np.random.uniform(-0.7, 0.1),  
-                #     np.random.uniform(-0.7, 0.1), 
-                #     0.0
-                # ], device=self.bin_pose.device)
-                # self.des_ee_pose[i, :3] += self.test_noise    
+                self.test_noise = torch.tensor([
+                    np.random.uniform(-0.6, 0.1),  
+                    np.random.uniform(-0.7, 0.1), 
+                    0.0
+                ], device=self.bin_pose.device)
+                self.des_ee_pose[i, :3] += self.test_noise    
                 # ## ----------------------
 
                 self.des_gripper_state[i] = GripperState.CLOSE

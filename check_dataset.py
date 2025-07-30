@@ -4,7 +4,7 @@ from PIL import Image
 
 # 경로 설정 (저장된 npz와 이미지 폴더가 실제로 있는 경로로 수정)
 base_dir = "/AILAB-summer-school-2025/success_traj"
-output_npz = os.path.join(base_dir, "success_traj_state.npz")
+output_npz = os.path.join(base_dir, "success_state_per_traj.npz")
 output_img_dir = os.path.join(base_dir, "success_traj_img")
 
 traj_folders = [
