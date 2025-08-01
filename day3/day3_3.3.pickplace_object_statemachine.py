@@ -415,17 +415,17 @@ class PickAndPlaceSm:
                 # 목표 end-effector 자세 및 그리퍼 상태 정의
                 self.des_ee_pose[i] = self.bin_pose[i]
 
-                # ##[failcase4] change mis put to bin 
-                if self.noise_start_step[i] is None:
-                    self.noise_start_step[i]= current_step
-                    print(f"[INFO] Noise first added at step {current_step}")
-                self.test_noise = torch.tensor([
-                    np.random.uniform(-0.6, 0.1),  
-                    np.random.uniform(-0.7, 0.1), 
-                    0.0
-                ], device=self.bin_pose.device)
-                self.des_ee_pose[i, :3] += self.test_noise    
-                # ## ----------------------
+                # # ##[failcase4] change mis put to bin 
+                # if self.noise_start_step[i] is None:
+                #     self.noise_start_step[i]= current_step
+                #     print(f"[INFO] Noise first added at step {current_step}")
+                # self.test_noise = torch.tensor([
+                #     np.random.uniform(-0.6, 0.1),  
+                #     np.random.uniform(-0.7, 0.1), 
+                #     0.0
+                # ], device=self.bin_pose.device)
+                # self.des_ee_pose[i, :3] += self.test_noise    
+                # # ## ----------------------
 
                 self.des_gripper_state[i] = GripperState.CLOSE
                 # 현재 state에서의 end-effector position을 저장
@@ -934,7 +934,10 @@ def main():
             final_log_dir = f"{log_dir}_len{traj_length}_success"
         else:
             noise_starting_point = pick_and_place_sm.noise_start_step[env_num]
-            final_log_dir = f"{log_dir}_len{traj_length}_failure_{noise_starting_point}step"
+            if noise_starting_point is not None:
+                final_log_dir = f"{log_dir}_len{traj_length}_failure_{noise_starting_point}step"
+            else:
+                final_log_dir = f"{log_dir}_len{traj_length}_failure"
         os.rename(log_dir, final_log_dir)
         make_gif_from_images(final_log_dir, pattern="front_view_*.png", gif_name="front_view.gif", duration=150)
         
