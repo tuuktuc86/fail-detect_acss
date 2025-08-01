@@ -8,7 +8,8 @@ dockers/
 Manual/
 output_data/*
 Pointnet_Pointnet2_pytorch/
-
+failure_case/*
+success_traj/*
 
 # Model files
 *.ckpt

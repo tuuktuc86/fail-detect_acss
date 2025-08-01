@@ -414,7 +414,7 @@ class PickAndPlaceSm:
                 # 목표 end-effector 자세 및 그리퍼 상태 정의
                 self.des_ee_pose[i] = self.bin_pose[i]
 
-                # ##[failcase 1] change mis put to bin 
+                # ##[failcase4] change mis put to bin 
                 self.test_noise = torch.tensor([
                     np.random.uniform(-0.6, 0.1),  
                     np.random.uniform(-0.7, 0.1), 
@@ -856,8 +856,8 @@ def main():
                 # 환경에 대한 액션을 실행
                 obs, rewards, terminated, truncated, info = env.step(actions)
                 step_count += 1
-
-                if freq % 5 == 0:
+                
+                if step_count % 5 == 0:
                     rgb_image = camera.get_rgba()
                     if rgb_image.shape[0] != 0:
                         rgb = rgb_image[:, :, :3]
@@ -872,7 +872,6 @@ def main():
 
                         img_pil_resized.save(os.path.join(log_dir, f'front_view_{step_count}.png'))
 
-                if freq % 5 == 0:
                     rgb_image = camera2.get_rgba()
                     if rgb_image.shape[0] != 0:
                         rgb = rgb_image[:, :, :3]
