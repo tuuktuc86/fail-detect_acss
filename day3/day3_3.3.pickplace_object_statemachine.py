@@ -301,6 +301,7 @@ class PickAndPlaceSm:
 
         # Gripper가 원하는 위치에 도달하지 못하는 경우, statemachine이 멈추는 것을 방지하기 위한 변수 선언
         self.stack_ee_pose = []
+        self.noise_start_step = [None for _ in range(self.num_envs)]
 
     # env idx 를 통한 reset 상태 실행
     def reset_idx(self, env_ids: Sequence[int] | None = None):
@@ -311,7 +312,7 @@ class PickAndPlaceSm:
 
     ##################################### State Machine #####################################
     # 로봇의 end-effector 및 그리퍼의 목표 상태 계산
-    def compute(self, ee_pose: torch.Tensor, grasp_pose: torch.Tensor, pregrasp_pose: torch.Tensor, robot_data):
+    def compute(self, ee_pose: torch.Tensor, grasp_pose: torch.Tensor, pregrasp_pose: torch.Tensor, robot_data, current_step):
         ee_pos = ee_pose[:, :3]
         ee_pos[:, 2] -= 0.5
 
@@ -415,6 +416,9 @@ class PickAndPlaceSm:
                 self.des_ee_pose[i] = self.bin_pose[i]
 
                 # ##[failcase4] change mis put to bin 
+                if self.noise_start_step[i] is None:
+                    self.noise_start_step[i]= current_step
+                    print(f"[INFO] Noise first added at step {current_step}")
                 self.test_noise = torch.tensor([
                     np.random.uniform(-0.6, 0.1),  
                     np.random.uniform(-0.7, 0.1), 
@@ -851,12 +855,12 @@ def main():
                     grasp_pose=pick_and_place_sm.grasp_pose,
                     pregrasp_pose=pick_and_place_sm.pregrasp_pose,
                     robot_data=robot_data,
-                )
-
+                    current_step= step_count, 
+                )  
                 # 환경에 대한 액션을 실행
                 obs, rewards, terminated, truncated, info = env.step(actions)
                 step_count += 1
-                
+
                 if step_count % 5 == 0:
                     rgb_image = camera.get_rgba()
                     if rgb_image.shape[0] != 0:
@@ -867,7 +871,7 @@ def main():
                             rgb = rgb.astype(np.uint8)
                         img_pil_ = Image.fromarray(rgb)
                         # img_pil_.save(os.path.join(log_dir, f'front_view_{freq}.png'))
-                        new_w, new_h = img_pil_.size[0] // 4, img_pil_.size[1] // 4
+                        new_w, new_h = img_pil_.size[0] // 2, img_pil_.size[1] // 2
                         img_pil_resized = img_pil_.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
                         img_pil_resized.save(os.path.join(log_dir, f'front_view_{step_count}.png'))
@@ -881,7 +885,7 @@ def main():
                             rgb = rgb.astype(np.uint8)
                         img_pil_ = Image.fromarray(rgb)
                         #img_pil_.save(os.path.join(log_dir, f'top_view_{freq}.png'))
-                        new_w, new_h = img_pil_.size[0] // 4, img_pil_.size[1] // 4
+                        new_w, new_h = img_pil_.size[0] // 2, img_pil_.size[1] // 2
                         img_pil_resized = img_pil_.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
                         img_pil_resized.save(os.path.join(log_dir, f'top_view_{step_count}.png'))
@@ -897,7 +901,7 @@ def main():
                         else:
                             im2_np = im2_np.astype(np.uint8)
                         img_pil = Image.fromarray(im2_np)
-                        new_w, new_h = img_pil.size[0] // 4, img_pil.size[1] // 4
+                        new_w, new_h = img_pil.size[0] // 2, img_pil.size[1] // 2
                         img_pil_resized = img_pil.resize((new_w, new_h), Image.Resampling.LANCZOS)
                         img_pil_resized.save(os.path.join(log_dir, f'wrist_view_{step_count}.png'))                       
                         #img_pil.save(os.path.join(log_dir, f'wrist_view_{freq}.png'))
@@ -929,7 +933,8 @@ def main():
         if is_success:
             final_log_dir = f"{log_dir}_len{traj_length}_success"
         else:
-            final_log_dir = f"{log_dir}_len{traj_length}_failure"
+            noise_starting_point = pick_and_place_sm.noise_start_step[env_num]
+            final_log_dir = f"{log_dir}_len{traj_length}_failure_{noise_starting_point}step"
         os.rename(log_dir, final_log_dir)
         make_gif_from_images(final_log_dir, pattern="front_view_*.png", gif_name="front_view.gif", duration=150)
         
