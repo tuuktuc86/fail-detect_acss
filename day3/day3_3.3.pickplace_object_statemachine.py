@@ -185,25 +185,7 @@ def CLIP_transform(img_tensor, output_size, fill=0, padding_mode='constant'):
 
 from PIL import Image
 # trajectory 끝난 후 log_dir 안의 front_view_* 이미지를 gif로 묶기
-def make_gif_from_images(image_dir, pattern="front_view_*.png", gif_name="trajectory.gif", duration=200):
-    # 저장된 이미지 경로 정렬
-    frames = []
-    imgs = sorted(glob.glob(os.path.join(image_dir, pattern)))
-    for img_path in imgs:
-        frame = Image.open(img_path)
-        frames.append(frame)
 
-    if frames:
-        frames[0].save(
-            os.path.join(image_dir, gif_name),
-            save_all=True,
-            append_images=frames[1:],
-            duration=duration,   # frame 간격(ms)
-            loop=0              # 0이면 무한 반복
-        )
-        print(f"[INFO] GIF saved at {os.path.join(image_dir, gif_name)}")
-    else:
-        print("[WARNING] No images found for GIF creation.")
 
 
 class GripperState:
@@ -530,8 +512,8 @@ def main():
     print(f"Environment reset. Number of environments: {env.unwrapped.num_envs}")
     
     # 환경 관측 카메라 시점 셋팅
-    #env.unwrapped.sim.set_camera_view(eye=[2.0, 0.0, 1.5], target=[0.0, 0.0, 0.5]) # person view 
-    env.unwrapped.sim.set_camera_view(eye=[0.0, 0.0, 5.0], target=[0.0, 0.0, 0.0])  # top view 
+    env.unwrapped.sim.set_camera_view(eye=[2.0, 0.0, 1.5], target=[0.0, 0.0, 0.5]) # person view 
+    #env.unwrapped.sim.set_camera_view(eye=[0.0, 0.0, 5.0], target=[0.0, 0.0, 0.0])  # top view 
 
     from isaacsim.core.api.objects import DynamicCuboid
     from isaacsim.sensors.camera import Camera
@@ -785,7 +767,7 @@ def main():
                         target_image = cv2.cvtColor(target_image, cv2.COLOR_BGR2RGB)
                         
                         # CLIP model 결과 cv2로 저장
-                        cv2.imwrite(f'data/CLIP_result_{user_text}.png', target_image)
+                        #cv2.imwrite(f'data/CLIP_result_{user_text}.png', target_image)
 
                 ####################################################################################
 
@@ -844,6 +826,7 @@ def main():
 
                 # 로봇의 End-Effector 위치와 자세를 기반으로 actions 계산
                 robot_data = env.unwrapped.scene["robot"].data
+                env.unwrapped.scene["robot"].data.applied_torque[0, -2:] = 0.0
                 ee_frame_sensor = env.unwrapped.scene["ee_frame"]
                 tcp_rest_position = ee_frame_sensor.data.target_pos_w[..., 0, :].clone() - env.unwrapped.scene.env_origins
                 tcp_rest_orientation = ee_frame_sensor.data.target_quat_w[..., 0, :].clone()
@@ -857,10 +840,14 @@ def main():
                     robot_data=robot_data,
                     current_step= step_count, 
                 )  
+                #print("ee_pose = ", ee_pose)
                 # 환경에 대한 액션을 실행
-                obs, rewards, terminated, truncated, info = env.step(actions)
+                
+                
+                
+                
                 step_count += 1
-
+                #print(f"obs = ", obs)
                 if step_count % 5 == 0:
                     rgb_image = camera.get_rgba()
                     if rgb_image.shape[0] != 0:
@@ -874,7 +861,7 @@ def main():
                         new_w, new_h = img_pil_.size[0] // 2, img_pil_.size[1] // 2
                         img_pil_resized = img_pil_.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-                        img_pil_resized.save(os.path.join(log_dir, f'front_view_{step_count}.png'))
+                        img_pil_resized.save(os.path.join(log_dir, f'front_view/front_view_{step_count}.png'))
 
                     rgb_image = camera2.get_rgba()
                     if rgb_image.shape[0] != 0:
@@ -888,7 +875,7 @@ def main():
                         new_w, new_h = img_pil_.size[0] // 2, img_pil_.size[1] // 2
                         img_pil_resized = img_pil_.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-                        img_pil_resized.save(os.path.join(log_dir, f'top_view_{step_count}.png'))
+                        img_pil_resized.save(os.path.join(log_dir, f'top_view/top_view_{step_count}.png'))
 
                     # Save robot_camera2 image (im2)
                     im2 = robot_camera2.data.output['rgb'][env_num]
@@ -903,18 +890,19 @@ def main():
                         img_pil = Image.fromarray(im2_np)
                         new_w, new_h = img_pil.size[0] // 2, img_pil.size[1] // 2
                         img_pil_resized = img_pil.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                        img_pil_resized.save(os.path.join(log_dir, f'wrist_view_{step_count}.png'))                       
+                        img_pil_resized.save(os.path.join(log_dir, f'wrist_view/wrist_view_{step_count}.png'))                       
                         #img_pil.save(os.path.join(log_dir, f'wrist_view_{freq}.png'))
 
                     # # Save viewport image
                     # vp = viewport_utils.get_active_viewport()
                     # viewport_utils.capture_viewport_to_file(vp, os.path.join(log_dir, f'viewport_{freq}.png'))
                     # Concatenate states into a dictionary and save as .npz (multi-array file)
-                    robotstate = torch.cat([ee_pose, torch.tensor(obs["policy"][0, 7:9].tolist(), device=ee_pose.device).unsqueeze(0)], dim=-1).cpu().numpy()
-                    data_dict = {
-                        'robot_state': robotstate,
-                    }
-                    np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
+                    # robotstate = torch.cat([ee_pose, torch.tensor(obs["policy"][0, 7:9].tolist(), device=ee_pose.device).unsqueeze(0)], dim=-1).cpu().numpy()
+                    # data_dict = {
+                    #     'robot_state': robotstate,
+                    # }
+                    # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
+                obs, rewards, terminated, truncated, info = env.step(actions)
                 
                 freq += 1
 
@@ -939,7 +927,6 @@ def main():
             else:
                 final_log_dir = f"{log_dir}_len{traj_length}_failure"
         os.rename(log_dir, final_log_dir)
-        make_gif_from_images(final_log_dir, pattern="front_view_*.png", gif_name="front_view.gif", duration=150)
         
         print(f"[INFO] Trajectory {total_traj+1} saved at {final_log_dir}")
         total_traj += 1 

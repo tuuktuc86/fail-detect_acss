@@ -178,7 +178,6 @@ class ObservationsCfg:
         object_position = ObsTerm(func=mdp_3_1.object_position_in_robot_root_frame)
         # target_object_position = ObsTerm(func=mdp_3_1.generated_commands, params={"command_name": "object_pose"})
         actions = ObsTerm(func=mdp_3_1.last_action)
-
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
