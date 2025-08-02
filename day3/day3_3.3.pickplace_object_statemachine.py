@@ -586,8 +586,13 @@ def main():
     # log_dir = f"simulation_logs_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     # os.makedirs(log_dir, exist_ok=True)    
     max_steps_per_traj=700
-    max_trajectories=7
+    max_trajectories=120
     total_traj = 0
+    dataset = {
+        "EE_pose": [],
+        "obs": [],
+        "applied_torque": [],
+    }
     # 시뮬레이션 루프
     while simulation_app.is_running() and total_traj < max_trajectories:
         env.reset()
@@ -602,7 +607,9 @@ def main():
         # 우선 success/failure 라벨 없는 폴더 생성
         log_dir = f"simulation_traj_{total_traj}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         os.makedirs(log_dir, exist_ok=True)
-
+        os.makedirs(os.path.join(log_dir, "front_view"), exist_ok=True)
+        os.makedirs(os.path.join(log_dir, "wrist_view"), exist_ok=True)
+        os.makedirs(os.path.join(log_dir, "top_view"), exist_ok=True)
         while not done and step_count < max_steps_per_traj:
         # 모델 추론 상태 - 학습 연산 비활성화
             with torch.no_grad(): #with torch.inference_mode():
@@ -846,7 +853,7 @@ def main():
                 
                 
                 
-                step_count += 1
+                
                 #print(f"obs = ", obs)
                 if step_count % 5 == 0:
                     rgb_image = camera.get_rgba()
@@ -903,8 +910,12 @@ def main():
                     # }
                     # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
                 obs, rewards, terminated, truncated, info = env.step(actions)
-                
-                freq += 1
+                dataset["EE_pose"].append(ee_pose)
+                dataset["obs"].append(obs['policy'][0])
+                dataset["applied_torque"].append(robot_data.applied_torque)
+
+                step_count += 1
+ 
 
                 # 시뮬레이션 종료 여부 체크
                 dones = terminated | truncated
@@ -916,7 +927,8 @@ def main():
                     else:
                         print("Episode truncated")
 
-
+        print(f"eepose = {dataset['EE_pose'].shape}, obs = {dataset['obs'].shape}, applied_torque = {dataset['applied_torque'].shape}")
+        np.savez(os.path.join(log_dir, "robot_state.npz"), **dataset)
         traj_length = step_count 
         if is_success:
             final_log_dir = f"{log_dir}_len{traj_length}_success"
