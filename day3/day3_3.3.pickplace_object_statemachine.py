@@ -603,7 +603,11 @@ def main():
         step_count = 0
         freq=0
         is_success = False
-
+        dataset = {
+            "EE_pose": [],
+            "obs": [],
+            "applied_torque": [],
+        }
         # 우선 success/failure 라벨 없는 폴더 생성
         log_dir = f"simulation_traj_{total_traj}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         os.makedirs(log_dir, exist_ok=True)
@@ -910,7 +914,11 @@ def main():
                     # }
                     # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
                 obs, rewards, terminated, truncated, info = env.step(actions)
-                dataset["EE_pose"].append(ee_pose)
+                # print("===================")
+                # print(ee_pose[0])
+                # print(obs['policy'][0])
+                # print(robot_data.applied_torque)
+                dataset["EE_pose"].append(ee_pose[0])
                 dataset["obs"].append(obs['policy'][0])
                 dataset["applied_torque"].append(robot_data.applied_torque)
 
@@ -927,9 +935,14 @@ def main():
                     else:
                         print("Episode truncated")
 
-        print(f"eepose = {dataset['EE_pose'].shape}, obs = {dataset['obs'].shape}, applied_torque = {dataset['applied_torque'].shape}")
+        print(f"eepose len = {len(dataset['EE_pose'])}, obs len = {len(dataset['obs'])}, applied_torque len = {len(dataset['applied_torque'])}")
+        for k in dataset:
+            dataset[k] = np.array([
+                v.detach().cpu().numpy() if isinstance(v, torch.Tensor) else v
+                for v in dataset[k]
+            ])
         np.savez(os.path.join(log_dir, "robot_state.npz"), **dataset)
-        traj_length = step_count 
+        traj_length = step_count
         if is_success:
             final_log_dir = f"{log_dir}_len{traj_length}_success"
         else:
