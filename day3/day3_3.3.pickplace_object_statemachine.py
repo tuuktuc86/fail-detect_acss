@@ -493,7 +493,6 @@ def main():
         use_fabric=not args_cli.disable_fabric,
     )
 
-    freq = 0
     user_text = None
 
     # 환경 생성 및 초기화
@@ -857,7 +856,7 @@ def main():
                 
                 
                 
-                
+                print("step_count = ", step_count)
                 #print(f"obs = ", obs)
                 if step_count % 5 == 0:
                     rgb_image = camera.get_rgba()
@@ -918,9 +917,10 @@ def main():
                 # print(ee_pose[0])
                 # print(obs['policy'][0])
                 # print(robot_data.applied_torque)
-                dataset["EE_pose"].append(ee_pose[0])
-                dataset["obs"].append(obs['policy'][0])
-                dataset["applied_torque"].append(robot_data.applied_torque)
+                if step_count != 0:
+                    dataset["EE_pose"].append(ee_pose[0])
+                    dataset["obs"].append(obs['policy'][0])
+                    dataset["applied_torque"].append(robot_data.applied_torque[0])
 
                 step_count += 1
  
@@ -942,7 +942,7 @@ def main():
                 for v in dataset[k]
             ])
         np.savez(os.path.join(log_dir, "robot_state.npz"), **dataset)
-        traj_length = step_count
+        traj_length = step_count-1
         if is_success:
             final_log_dir = f"{log_dir}_len{traj_length}_success"
         else:
