@@ -1,7 +1,7 @@
 import numpy as np
 
 # 파일 경로
-file_path = "/AILAB-summer-school-2025/simulation_traj_0_20250804_055303_len469_success/robot_state.npz"
+file_path = "/AILAB-summer-school-2025/success_data_preprocessing/success_episode1_steps320.npz"
 
 data = np.load(file_path, allow_pickle=True)
 

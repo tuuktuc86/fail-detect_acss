@@ -374,6 +374,7 @@ class PickAndPlaceSm:
             elif state == PickAndPlaceSmState.CLOSE:
                 # 목표 end-effector 자세 및 그리퍼 상태 정의
                 self.des_ee_pose[i] = ee_pose[i]
+                #failcase1
                 self.des_gripper_state[i] = GripperState.CLOSE
                 # 특정 시간 동안 대기
                 if self.sm_wait_time[i] >= PickAndPlaceSmWaitTime.CLOSE:
@@ -387,6 +388,7 @@ class PickAndPlaceSm:
             elif state == PickAndPlaceSmState.LIFT:
                 # 목표 end-effector 자세 및 그리퍼 상태 정의
                 self.des_ee_pose[i] = self.lift_pose 
+                #failecase1
                 self.des_gripper_state[i] = GripperState.CLOSE
                 # 목표자세 도딜시 특정 시간 동안 대기
                 if torch.linalg.norm(ee_pos[i] - self.des_ee_pose[i, :3]) < self.position_threshold:
@@ -410,7 +412,7 @@ class PickAndPlaceSm:
                 # ], device=self.bin_pose.device)
                 # self.des_ee_pose[i, :3] += self.test_noise    
                 # # ## ----------------------
-
+                #case4
                 self.des_gripper_state[i] = GripperState.CLOSE
                 # 현재 state에서의 end-effector position을 저장
                 self.stack_ee_pose.append(ee_pos[i])
@@ -587,7 +589,7 @@ def main():
     # log_dir = f"simulation_logs_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     # os.makedirs(log_dir, exist_ok=True)    
     max_steps_per_traj=500
-    max_trajectories=120
+    max_trajectories=10
     total_traj = 0
     dataset = {
         "EE_pose": [],
@@ -823,7 +825,10 @@ def main():
                             
                             # rotation matrix를 사용하여 예측한 파지점의 offset 맞추기
                             z_axis = grasp_rot[:, 2]
+                            x_axis = grasp_rot[:, 0]
+                            y_axis = grasp_rot[:, 1]
                             grasp_pos = pregrasp_pos + z_axis * 0.085 # change : miss put point  
+                            #grasp_pos = pregrasp_pos + z_axis * 0.1*random.uniform(-1, 1) + x_axis * 0.1*random.uniform(-1, 1) + y_axis * 0.1*random.uniform(-1, 1) # change : miss put point  
 
                             # 예측한 파지점 pose를 torch tensor로 변환
                             pregrasp_pose = np.concatenate([pregrasp_pos, grasp_quat])
@@ -923,16 +928,18 @@ def main():
                     #     'robot_state': robotstate,
                     # }
                     # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
+
+                # if save_count >=200 and save_count <=250:
+                    
+                #     actions[0][1] -= 2
+                #     actions[0][2] -= 2
+
                 obs, rewards, terminated, truncated, info = env.step(actions)
                 # print("===================")
                 # print(ee_pose[0])
                 # print(obs['policy'][0])
                 # print(robot_data.applied_torque)
                 step_count += 1
-                
-                    
-                
-
 
                 # 시뮬레이션 종료 여부 체크
                 dones = terminated | truncated
