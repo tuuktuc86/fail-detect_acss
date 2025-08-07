@@ -5,19 +5,12 @@ from torchvision import models, transforms
 from PIL import Image
 import re
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
-# 동일한 구조의 모델 정의
-resnet18 = models.resnet18()
+# ✅ 1. ResNet18 정의
+resnet18 = models.resnet18(pretrained=True)
 resnet18.fc = torch.nn.Identity()
-
-# 저장된 weight 로드
-weight_path = "/AILAB-summer-school-2025/scripts/model/resnet18_512.pth"  # 경로 수정
-resnet18.load_state_dict(torch.load(weight_path, map_location=device))
-resnet18 = resnet18.to(device)
 resnet18.eval()
-
-# weight 확인용 hash
+device = "cuda" if torch.cuda.is_available() else "cpu"
+resnet18 = resnet18.to(device)
 print("Weight hash:", hash(str(resnet18.state_dict())))
 # ✅ 2. 이미지 전처리 transform
 transform = transforms.Compose([

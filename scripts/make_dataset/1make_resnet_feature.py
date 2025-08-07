@@ -75,16 +75,25 @@ def process_all_episodes(root_dir, output_npz):
             print(f"⚠️ Skipping {ep_dir} due to mismatched frame counts: front={T_f}, top={T_t}, wrist={T_w}")
             continue
 
+
         front_list.append(front_feat)
         top_list.append(top_feat)
         wrist_list.append(wrist_feat)
 
+       
     # ✅ 저장 (object array 형태)
+
+    front_data = np.array(front_list, dtype=object)
+    top_data = np.array(top_list, dtype=object)
+    wrist_data = np.array(wrist_list, dtype=object)
+    # print(front_data.shape)
+    # print(len(front_data[0]))
+    # print(len(front_data[0][0]))
     np.savez_compressed(
         output_npz,
-        front_view=np.array(front_list, dtype=object),
-        top_view=np.array(top_list, dtype=object),
-        wrist_view=np.array(wrist_list, dtype=object)
+        front_view=front_data,
+        top_view=top_data,
+        wrist_view=wrist_data
     )
     print(f"✅ Saved to {output_npz}")
 
