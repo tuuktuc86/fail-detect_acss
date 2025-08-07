@@ -19,10 +19,10 @@ def collect_robot_states(root_dir, output_file="total_robot_state.npz"):
             # numpy object는 dict로 변환
             merged_data[episode_key] = {
                 "EE_pose": data["EE_pose"],
-                "obs": data["obs"],
+                "joint_": data["obs"],
                 "applied_torque": data["applied_torque"]
             }
-
+    
     # np.savez로 저장 (dictionary of dictionaries는 np.savez로 바로 저장 불가 → workaround 필요)
     # → 각 episode의 key를 flatten 해서 저장
     save_dict = {}
