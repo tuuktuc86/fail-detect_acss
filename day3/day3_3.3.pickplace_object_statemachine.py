@@ -587,7 +587,7 @@ def main():
     # log_dir = f"simulation_logs_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     # os.makedirs(log_dir, exist_ok=True)    
     max_steps_per_traj=500
-    max_trajectories=120
+    max_trajectories=50
     total_traj = 0
     dataset = {
         "EE_pose": [],
@@ -923,16 +923,14 @@ def main():
                     #     'robot_state': robotstate,
                     # }
                     # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
+
+
                 obs, rewards, terminated, truncated, info = env.step(actions)
                 # print("===================")
                 # print(ee_pose[0])
                 # print(obs['policy'][0])
                 # print(robot_data.applied_torque)
                 step_count += 1
-                
-                    
-                
-
 
                 # 시뮬레이션 종료 여부 체크
                 dones = terminated | truncated
