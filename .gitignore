@@ -23,6 +23,7 @@ success_traj/*
 *.npz
 *.npy
 *.png
+*.pkl
 
 # Temporary and cache files
 *.tmp
