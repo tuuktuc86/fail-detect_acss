@@ -1,0 +1,86 @@
+#directoreies
+cgnet/*
+graspnetAPI/*
+data/*
+day1/coco/*
+day1/data/*
+dockers/
+Manual/
+output_data/*
+Pointnet_Pointnet2_pytorch/
+failure_case/*
+success_traj/*
+fail_during_success_data/*
+success_data/*
+endToEnd_forSuccess/dataset_natural_fail/*
+endToEnd_forSuccess/dataset/*
+
+# Model files
+*.ckpt
+*.pth
+*.safetensors
+*.npz
+
+# Dataset files
+*.hdf5
+*.h5
+*.npz
+*.npy
+*.png
+
+# Temporary and cache files
+*.tmp
+*.temp
+*.cache
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Environment files
+.env
+.venv/*
+venv/*
+env/*
+ENV/*
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/*
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyTorch Lightning
+lightning_logs/
