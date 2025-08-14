@@ -4,7 +4,7 @@
 BASE_DIR="/AILAB-summer-school-2025/success_data_raw"
 
 # 에피소드 번호 초기화
-episode_number=472
+episode_number=1
 
 # "len숫자_success"를 포함한 디렉토리를 이름순 정렬하여 반복
 for dir in $(find "$BASE_DIR" -maxdepth 1 -type d -name "simulation_traj_*_len*_success" | sort); do
