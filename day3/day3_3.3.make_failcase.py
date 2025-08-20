@@ -413,7 +413,7 @@ class PickAndPlaceSm:
                 # self.des_ee_pose[i, :3] += self.test_noise    
                 # # ## ----------------------
                 #case4
-                self.des_gripper_state[i] = GripperState.CLOSE
+                self.des_gripper_state[i] = GripperState.OPEN
                 # 현재 state에서의 end-effector position을 저장
                 self.stack_ee_pose.append(ee_pos[i])
                 # 목표자세 도딜시 특정 시간 동안 대기
@@ -871,7 +871,7 @@ def main():
                     
                     
                     #print("save_count = ", save_count)
-                    if save_count % 5 == 0:
+                    if save_count % 1 == 0:
                         dataset["EE_pose"].append(ee_pose[0])
                         dataset["obs"].append(obs['policy'][0])
                         dataset["applied_torque"].append(robot_data.applied_torque[0])  

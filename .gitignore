@@ -17,6 +17,10 @@ success_traj/*
 *.safetensors
 *.npz
 
+!/AILAB-summer-school-2025/scripts/model/model_pca_front_view.pkl
+!/AILAB-summer-school-2025/scripts/model/model_pca_top_view.pkl
+!/AILAB-summer-school-2025/scripts/model/model_pca_wrist_view.pkl
+!/AILAB-summer-school-2025/cgnet/inference_cgnet.py
 # Dataset files
 *.hdf5
 *.h5
