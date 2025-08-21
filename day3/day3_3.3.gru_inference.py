@@ -1,3 +1,124 @@
+# train_ssl_3to1_11in_8out.py
+import argparse, os, math
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
+
+IN_DIM  = 11
+OUT_DIM = 8
+PAST_N  = 3
+
+class NPZNextStepDataset(Dataset):
+    def __init__(self, npz_path: str):
+        self.path  = npz_path
+        # 키/길이만 1회 읽고 닫기
+        with np.load(self.path, allow_pickle=False) as f:
+            self.keys = sorted(f.files)
+            self.lens = {k: f[k].shape[0] for k in self.keys}
+
+        # 인덱스 구축 (target = t+1)
+        self.index = []
+        for k in self.keys:
+            T = self.lens[k]
+            if T >= 2:
+                for t in range(0, T-1):
+                    self.index.append((k, t+1))
+
+        # 정규화 통계 (한 번만 열어 계산)
+        with np.load(self.path, allow_pickle=False) as f:
+            all_obs = np.concatenate([f[k] for k in self.keys], axis=0).astype(np.float32)
+        self.mean_in  = torch.from_numpy(all_obs.mean(0))
+        self.std_in   = torch.from_numpy(all_obs.std(0) + 1e-6)
+        self.mean_out = self.mean_in[:OUT_DIM].clone()
+        self.std_out  = self.std_in[:OUT_DIM].clone()
+
+    def __len__(self): return len(self.index)
+
+    def __getitem__(self, i):
+        k, tgt = self.index[i]  # tgt in [1..T-1]
+        # 안전하게 매 호출 시 파일 열기
+        with np.load(self.path, allow_pickle=False) as f:
+            ep = f[k]  # (T,11)
+
+            # 최근 3스텝 복제 패딩
+            frames = []
+            for dt in range(PAST_N, 0, -1):
+                idx = tgt - dt
+                if idx < 0: idx = 0
+                frames.append(ep[idx])
+
+            x = torch.from_numpy(np.stack(frames, axis=0)).float()   # (3,11)
+            y = torch.from_numpy(ep[tgt, :OUT_DIM]).float()          # (8,)
+        return x, y
+class GRUForecast(nn.Module):
+    def __init__(self, hidden=256, layers=2):
+        super().__init__()
+        self.gru = nn.GRU(input_size=IN_DIM, hidden_size=hidden, num_layers=layers, batch_first=True)
+        self.head = nn.Sequential(
+            nn.Linear(hidden, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, OUT_DIM),
+        )
+    def forward(self, x):                 # x: (B,3,11)
+        h, _ = self.gru(x)                # (B,3,H)
+        return self.head(h[:, -1, :])     # (B,8)
+
+from collections import deque
+import torch
+
+class ObsHistory:
+    def __init__(self, hist_len=3):
+        self.hist_len = hist_len
+        self.buffer = deque(maxlen=hist_len)
+
+    def add(self, obs):
+        """obs: torch.Tensor (11,) 같은 단일 observation"""
+        self.buffer.append(obs.detach().clone())
+
+    def get(self):
+        """(hist_len, obs_dim) tensor 반환 (복제 패딩 포함)"""
+        if len(self.buffer) == 0:
+            raise ValueError("No obs in buffer yet!")
+        
+        if len(self.buffer) == 1:
+            # 같은 obs 3개
+            out = [self.buffer[0]] * self.hist_len
+        elif len(self.buffer) == 2:
+            # 첫 obs + 마지막 obs 복제 2개
+            out = [self.buffer[0], self.buffer[1], self.buffer[1]]
+        else:
+            # 이미 3개 이상 → deque 특성상 최근 3개만 유지됨
+            out = list(self.buffer)
+        
+        return torch.stack(out, dim=0)   # (3, obs_dim)
+
+
+@torch.no_grad()
+def predict_next8(obs_hist_3, ckpt_path, cpu=False):
+    ckpt = torch.load(ckpt_path, map_location="cpu")
+    cfg = ckpt["cfg"]
+    device = torch.device("cpu" if cpu else ("cuda" if torch.cuda.is_available() else "cpu"))
+    model = GRUForecast(hidden=cfg["hidden"], layers=cfg["layers"]).to(device)
+    model.load_state_dict(ckpt["model"]); model.eval()
+
+    # 🔥 stats는 바로 torch.tensor로 변환
+    stats = np.load(os.path.join(cfg["out"], "norm_stats.npz"))
+    mi = torch.tensor(stats["mean_in"], dtype=torch.float32, device=device)
+    si = torch.tensor(stats["std_in"], dtype=torch.float32, device=device)
+    mo = torch.tensor(stats["mean_out"], dtype=torch.float32, device=device)
+    so = torch.tensor(stats["std_out"], dtype=torch.float32, device=device)
+
+    # 입력 obs_hist_3 (3,11)
+    x = torch.as_tensor(obs_hist_3, dtype=torch.float32, device=device).unsqueeze(0)  # (1,3,11)
+    x = (x - mi) / si
+    y = model(x)[0]
+    y = y * so + mo
+    return y.cpu().numpy()
+
+
+
+
 import argparse
 import os
 import datetime
@@ -494,6 +615,7 @@ def main():
         num_envs=num_envs,
         use_fabric=not args_cli.disable_fabric,
     )
+    hist = ObsHistory(hist_len=3)
 
     user_text = None
 
@@ -845,8 +967,8 @@ def main():
                 tcp_rest_position = ee_frame_sensor.data.target_pos_w[..., 0, :].clone() - env.unwrapped.scene.env_origins
                 tcp_rest_orientation = ee_frame_sensor.data.target_quat_w[..., 0, :].clone()
                 ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
-                
-
+                imitation_obs = torch.cat([ee_pose[0], pick_and_place_sm.des_gripper_state[0], env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'][0][:3]], dim=0)
+                hist.add(imitation_obs)
                 # print("step = ", save_count)
                 # print(env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'])
                 # print(ee_pose)
@@ -932,8 +1054,10 @@ def main():
                     # }
                     # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
 
-
-                obs, rewards, terminated, truncated, info = env.step(actions)
+                obs_hist_3= hist.get()
+                pred_next = predict_next8(obs_hist_3, "/AILAB-summer-school-2025/next8/best.pt")
+                print(pred_next)
+                obs, rewards, terminated, truncated, info = env.step(pred_next)
                 print(actions)
                 # print("===================")
                 # print(ee_pose[0])

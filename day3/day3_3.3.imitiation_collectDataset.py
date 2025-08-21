@@ -72,6 +72,41 @@ gym.register(
     disable_env_checker=True,
 )
 
+# build_dataset.py
+import pickle
+import numpy as np
+from typing import List, Dict, Any
+
+OBS_DIM = 11  # ee_pose(7) + gripper(1) + object_root(3) = 11이 아니라 (7+1+3=11, 7+1+3=11인데 위 코드에는 14로 잡혀 있음 확인 필요)
+
+def to_numpy1d(x, dim):
+    if isinstance(x, torch.Tensor):
+        x = x.detach().cpu().cpu().numpy()
+    arr = np.asarray(x, dtype=np.float32).reshape(-1)
+    assert arr.size == dim, f"dim mismatch {arr.size} vs {dim}"
+    return arr
+
+class EpisodeRecorderNPZ:
+    def __init__(self):
+        self.obs = []
+        self.active = False
+
+    def start(self):
+        self.obs.clear()
+        self.active = True
+
+    def append_obs(self, obs_vec):
+        assert self.active
+        self.obs.append(to_numpy1d(obs_vec, OBS_DIM))
+
+    def end(self):
+        self.active = False
+        return np.stack(self.obs, axis=0)  # (T, OBS_DIM)
+    
+def save_dataset_npz(episodes, path="/AILAB-summer-school-2025/dataset_obs.npz"):
+    # episodes: dict {"001": np.ndarray(T,OBS_DIM), ...}
+    np.savez_compressed(path, **episodes)
+    print(f"Saved {len(episodes)} episodes -> {path}")
 
 # Detection 모델 설정
 DIR_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -586,14 +621,18 @@ def main():
     # Create a directory for saving logs
     # log_dir = f"simulation_logs_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     # os.makedirs(log_dir, exist_ok=True)    
-    max_steps_per_traj=500
-    max_trajectories=50
+    max_steps_per_traj=550
+    max_trajectories=110
     total_traj = 0
     dataset = {
         "EE_pose": [],
         "obs": [],
         "applied_torque": [],
     }
+    # load_data = np.load("/AILAB-summer-school-2025/simulation_traj_0_20250821_051225_len478_success/robot_state.npz")
+    # load_ee_pose = load_data["EE_pose"]   # 보통 shape = (T, dim) 형태 (예: (325, 7) → pos(3)+quat(4))\
+    episodes = {}
+    success_count = 0
     # 시뮬레이션 루프
     while simulation_app.is_running() and total_traj < max_trajectories:
         env.reset()
@@ -609,6 +648,10 @@ def main():
             "obs": [],
             "applied_torque": [],
         }
+        rec = EpisodeRecorderNPZ()
+        rec.start()
+
+        
         # 우선 success/failure 라벨 없는 폴더 생성
         log_dir = f"simulation_traj_{total_traj}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         os.makedirs(log_dir, exist_ok=True)
@@ -845,15 +888,10 @@ def main():
                 tcp_rest_position = ee_frame_sensor.data.target_pos_w[..., 0, :].clone() - env.unwrapped.scene.env_origins
                 tcp_rest_orientation = ee_frame_sensor.data.target_quat_w[..., 0, :].clone()
                 ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
+                imitation_obs = torch.cat([ee_pose[0], pick_and_place_sm.des_gripper_state[0], env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'][0][:3]], dim=0)   # (1,14)
                 
-
-                # print("step = ", save_count)
-                # print(env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'])
-                # print(ee_pose)
-                # print(pick_and_place_sm.des_gripper_state)
-                # imitation_obs = torch.cat([ee_pose[0], pick_and_place_sm.des_gripper_state[0], env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'][0][:3]], dim=0)   # (1,14)
-                # print(imitation_obs.shape)
-#env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose']
+                #obs_list.append(imitation_obs)
+                
                 # state machine 을 통한 action 값 출력
                 actions = pick_and_place_sm.compute(
                     ee_pose=ee_pose,
@@ -865,63 +903,60 @@ def main():
                 #print("ee_pose = ", ee_pose)
                 # 환경에 대한 액션을 실행
                 
-                
-                
+                if pick_and_place_sm.sm_state >=1: #
+                    if save_count >1:
                 #print("step_count = ", step_count)
                 
                 #print(f"obs = ", obs)
-                if pick_and_place_sm.sm_state >=1: #after predict
-                    
-                    
-                    #print("save_count = ", save_count)
-                    if save_count % 5 == 0:
+                        rec.append_obs(imitation_obs)
                         dataset["EE_pose"].append(ee_pose[0])
                         dataset["obs"].append(obs['policy'][0])
-                        dataset["applied_torque"].append(robot_data.applied_torque[0])  
-                        rgb_image = camera.get_rgba()
-                        if rgb_image.shape[0] != 0:
-                            rgb = rgb_image[:, :, :3]
-                            if rgb.max() <= 1.0:
-                                rgb = (rgb * 255).astype(np.uint8)
-                            else:
-                                rgb = rgb.astype(np.uint8)
-                            img_pil_ = Image.fromarray(rgb)
-                            # img_pil_.save(os.path.join(log_dir, f'front_view_{freq}.png'))
-                            new_w, new_h = img_pil_.size[0] // 2, img_pil_.size[1] // 2
-                            img_pil_resized = img_pil_.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                
+                #dataset["applied_torque"].append(robot_data.applied_torque[0])  
+                        # rgb_image = camera.get_rgba()
+                        # if rgb_image.shape[0] != 0:
+                        #     rgb = rgb_image[:, :, :3]
+                        #     if rgb.max() <= 1.0:
+                        #         rgb = (rgb * 255).astype(np.uint8)
+                        #     else:
+                        #         rgb = rgb.astype(np.uint8)
+                        #     img_pil_ = Image.fromarray(rgb)
+                        #     # img_pil_.save(os.path.join(log_dir, f'front_view_{freq}.png'))
+                        #     new_w, new_h = img_pil_.size[0] // 2, img_pil_.size[1] // 2
+                        #     img_pil_resized = img_pil_.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-                            img_pil_resized.save(os.path.join(log_dir, f'front_view/front_view_{save_count}.png'))
+                        #     img_pil_resized.save(os.path.join(log_dir, f'front_view/front_view_{save_count}.png'))
 
-                        rgb_image = camera2.get_rgba()
-                        if rgb_image.shape[0] != 0:
-                            rgb = rgb_image[:, :, :3]
-                            if rgb.max() <= 1.0:
-                                rgb = (rgb * 255).astype(np.uint8)
-                            else:
-                                rgb = rgb.astype(np.uint8)
-                            img_pil_ = Image.fromarray(rgb)
-                            #img_pil_.save(os.path.join(log_dir, f'top_view_{freq}.png'))
-                            new_w, new_h = img_pil_.size[0] // 2, img_pil_.size[1] // 2
-                            img_pil_resized = img_pil_.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                        # rgb_image = camera2.get_rgba()
+                        # if rgb_image.shape[0] != 0:
+                        #     rgb = rgb_image[:, :, :3]
+                        #     if rgb.max() <= 1.0:
+                        #         rgb = (rgb * 255).astype(np.uint8)
+                        #     else:
+                        #         rgb = rgb.astype(np.uint8)
+                        #     img_pil_ = Image.fromarray(rgb)
+                        #     #img_pil_.save(os.path.join(log_dir, f'top_view_{freq}.png'))
+                        #     new_w, new_h = img_pil_.size[0] // 2, img_pil_.size[1] // 2
+                        #     img_pil_resized = img_pil_.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-                            img_pil_resized.save(os.path.join(log_dir, f'top_view/top_view_{save_count}.png'))
+                        #     img_pil_resized.save(os.path.join(log_dir, f'top_view/top_view_{save_count}.png'))
 
-                        # Save robot_camera2 image (im2)
-                        im2 = robot_camera2.data.output['rgb'][env_num]
-                        if len(im2.shape) == 3:  # Expected shape: (channels, height, width) or (height, width, channels)
-                            if im2.shape[0] in [3, 4]:  # If channels-first (e.g., (3, height, width))
-                                im2 = im2.permute(1, 2, 0)  # Convert to (height, width, channels)
-                            im2_np = im2.detach().cpu().numpy()
-                            if im2_np.max() <= 1.0:
-                                im2_np = (im2_np * 255).astype(np.uint8)
-                            else:
-                                im2_np = im2_np.astype(np.uint8)
-                            img_pil = Image.fromarray(im2_np)
-                            new_w, new_h = img_pil.size[0] // 2, img_pil.size[1] // 2
-                            img_pil_resized = img_pil.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                            img_pil_resized.save(os.path.join(log_dir, f'wrist_view/wrist_view_{save_count}.png'))                       
-                            #img_pil.save(os.path.join(log_dir, f'wrist_view_{freq}.png'))
-                    save_count+=1
+                        # # Save robot_camera2 image (im2)
+                        # im2 = robot_camera2.data.output['rgb'][env_num]
+                        # if len(im2.shape) == 3:  # Expected shape: (channels, height, width) or (height, width, channels)
+                        #     if im2.shape[0] in [3, 4]:  # If channels-first (e.g., (3, height, width))
+                        #         im2 = im2.permute(1, 2, 0)  # Convert to (height, width, channels)
+                        #     im2_np = im2.detach().cpu().numpy()
+                        #     if im2_np.max() <= 1.0:
+                        #         im2_np = (im2_np * 255).astype(np.uint8)
+                        #     else:
+                        #         im2_np = im2_np.astype(np.uint8)
+                        #     img_pil = Image.fromarray(im2_np)
+                        #     new_w, new_h = img_pil.size[0] // 2, img_pil.size[1] // 2
+                        #     img_pil_resized = img_pil.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                        #     img_pil_resized.save(os.path.join(log_dir, f'wrist_view/wrist_view_{save_count}.png'))                       
+                        #     #img_pil.save(os.path.join(log_dir, f'wrist_view_{freq}.png'))
+                save_count+=1
                     # # Save viewport image
                     # vp = viewport_utils.get_active_viewport()
                     # viewport_utils.capture_viewport_to_file(vp, os.path.join(log_dir, f'viewport_{freq}.png'))
@@ -932,9 +967,15 @@ def main():
                     # }
                     # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
 
-
+                # if save_count >= 1:
+                #     t = torch.as_tensor(load_ee_pose, device=actions.device, dtype=actions.dtype)
+                #     with torch.no_grad():
+                #         actions[0][0:7].copy_(t[save_count-1])      
+                    
+                
+                #print(actions)
                 obs, rewards, terminated, truncated, info = env.step(actions)
-                print(actions)
+                
                 # print("===================")
                 # print(ee_pose[0])
                 # print(obs['policy'][0])
@@ -944,6 +985,7 @@ def main():
                 # 시뮬레이션 종료 여부 체크
                 dones = terminated | truncated
                 if dones:
+                    ep_arr = rec.end()
                     done = True
                     if terminated:
                         is_success = True
@@ -960,6 +1002,11 @@ def main():
         np.savez(os.path.join(log_dir, "robot_state.npz"), **dataset)
         traj_length = save_count
         if is_success:
+            key = f"episode{success_count:03d}"
+            episodes[key] = ep_arr
+            print(f"{key} added")
+            success_count+=1
+           
             final_log_dir = f"{log_dir}_len{traj_length}_success"
         else:
             noise_starting_point = pick_and_place_sm.noise_start_step[env_num]
@@ -972,6 +1019,8 @@ def main():
         print(f"[INFO] Trajectory {total_traj+1} saved at {final_log_dir}")
         total_traj += 1 
     # 환경 종료 및 시뮬레이션 종료
+    save_dataset_npz(episodes, "/AILAB-summer-school-2025/dataset_all.npz")
+
     env.close()
     simulation_app.close()       
 # 메인 함수 실행
