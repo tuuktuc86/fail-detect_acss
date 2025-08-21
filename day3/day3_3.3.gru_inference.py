@@ -100,9 +100,10 @@ def predict_next8(obs_hist_3, ckpt_path, cpu=False):
     cfg = ckpt["cfg"]
     device = torch.device("cpu" if cpu else ("cuda" if torch.cuda.is_available() else "cpu"))
     model = GRUForecast(hidden=cfg["hidden"], layers=cfg["layers"]).to(device)
-    model.load_state_dict(ckpt["model"]); model.eval()
+    model.load_state_dict(ckpt["model"])
+    model.eval()
 
-    # 🔥 stats는 바로 torch.tensor로 변환
+    # 정규화 파라미터
     stats = np.load(os.path.join(cfg["out"], "norm_stats.npz"))
     mi = torch.tensor(stats["mean_in"], dtype=torch.float32, device=device)
     si = torch.tensor(stats["std_in"], dtype=torch.float32, device=device)
@@ -113,8 +114,13 @@ def predict_next8(obs_hist_3, ckpt_path, cpu=False):
     x = torch.as_tensor(obs_hist_3, dtype=torch.float32, device=device).unsqueeze(0)  # (1,3,11)
     x = (x - mi) / si
     y = model(x)[0]
-    y = y * so + mo
-    return y.cpu().numpy()
+    y = y * so + mo  # (8,)
+
+    # 마지막 요소 (그리퍼 상태) sign 처리
+    y[-1] = -1.0 if y[-1] < 0 else 1.0
+
+    # (1,8) 형태로 반환
+    return y.unsqueeze(0)   # torch.Tensor (1,8, device=device)
 
 
 
@@ -1054,10 +1060,11 @@ def main():
                     # }
                     # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
 
-                obs_hist_3= hist.get()
-                pred_next = predict_next8(obs_hist_3, "/AILAB-summer-school-2025/next8/best.pt")
-                print(pred_next)
-                obs, rewards, terminated, truncated, info = env.step(pred_next)
+                if pick_and_place_sm.sm_state >=1
+                    obs_hist_3= hist.get()
+                    actions = predict_next8(obs_hist_3, "/AILAB-summer-school-2025/next8/best.pt")
+                
+                obs, rewards, terminated, truncated, info = env.step(actions)
                 print(actions)
                 # print("===================")
                 # print(ee_pose[0])
