@@ -622,7 +622,7 @@ def main():
     # log_dir = f"simulation_logs_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     # os.makedirs(log_dir, exist_ok=True)    
     max_steps_per_traj=550
-    max_trajectories=110
+    max_trajectories=50
     total_traj = 0
     dataset = {
         "EE_pose": [],
@@ -888,7 +888,6 @@ def main():
                 tcp_rest_position = ee_frame_sensor.data.target_pos_w[..., 0, :].clone() - env.unwrapped.scene.env_origins
                 tcp_rest_orientation = ee_frame_sensor.data.target_quat_w[..., 0, :].clone()
                 ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
-                imitation_obs = torch.cat([ee_pose[0], pick_and_place_sm.des_gripper_state[0], env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'][0][:3]], dim=0)   # (1,14)
                 
                 #obs_list.append(imitation_obs)
                 
@@ -899,20 +898,25 @@ def main():
                     pregrasp_pose=pick_and_place_sm.pregrasp_pose,
                     robot_data=robot_data,
                     current_step= step_count, 
-                )  
+                ) 
+                #ee_pose[0][2] -= 0.5 
+                imitation_obs = torch.cat([ee_pose[0], pick_and_place_sm.des_gripper_state[0], env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'][0][:3]], dim=0)   # (1,14)
+                
                 #print("ee_pose = ", ee_pose)
                 # 환경에 대한 액션을 실행
                 
-                if pick_and_place_sm.sm_state >=1: #
+                if pick_and_place_sm.sm_state >=3: #
+                    
+                    #print("*********************save start*********************")
                     if save_count >1:
-                #print("step_count = ", step_count)
+                        #print("step_count = ", step_count)
                 
-                #print(f"obs = ", obs)
+                        #print(f"obs = ", obs)
                         rec.append_obs(imitation_obs)
                         dataset["EE_pose"].append(ee_pose[0])
                         dataset["obs"].append(obs['policy'][0])
                 
-                #dataset["applied_torque"].append(robot_data.applied_torque[0])  
+                        dataset["applied_torque"].append(robot_data.applied_torque[0])  
                         # rgb_image = camera.get_rgba()
                         # if rgb_image.shape[0] != 0:
                         #     rgb = rgb_image[:, :, :3]
@@ -972,7 +976,6 @@ def main():
                 #     with torch.no_grad():
                 #         actions[0][0:7].copy_(t[save_count-1])      
                     
-                
                 #print(actions)
                 obs, rewards, terminated, truncated, info = env.step(actions)
                 
@@ -1004,7 +1007,7 @@ def main():
         if is_success:
             key = f"episode{success_count:03d}"
             episodes[key] = ep_arr
-            print(f"{key} added")
+            print(f"success **{key} added,")
             success_count+=1
            
             final_log_dir = f"{log_dir}_len{traj_length}_success"
@@ -1019,7 +1022,7 @@ def main():
         print(f"[INFO] Trajectory {total_traj+1} saved at {final_log_dir}")
         total_traj += 1 
     # 환경 종료 및 시뮬레이션 종료
-    save_dataset_npz(episodes, "/AILAB-summer-school-2025/dataset_all.npz")
+    save_dataset_npz(episodes, "/AILAB-summer-school-2025/dataset_all_afterpregrasp_t3.npz")
 
     env.close()
     simulation_app.close()       

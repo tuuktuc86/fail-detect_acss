@@ -1,4 +1,4 @@
-# train_ssl_3to1_11in_8out.py
+# train_bc_transformer_3to1_11in_8out.py
 import argparse, os, math
 import numpy as np
 import torch
@@ -9,23 +9,20 @@ IN_DIM  = 11
 OUT_DIM = 8
 PAST_N  = 3
 
+# ----------------------- Dataset -----------------------
 class NPZNextStepDataset(Dataset):
     def __init__(self, npz_path: str):
         self.path  = npz_path
-        # 키/길이만 1회 읽고 닫기
         with np.load(self.path, allow_pickle=False) as f:
             self.keys = sorted(f.files)
             self.lens = {k: f[k].shape[0] for k in self.keys}
 
-        # 인덱스 구축 (target = t+1)
         self.index = []
         for k in self.keys:
             T = self.lens[k]
-            if T >= 2:
-                for t in range(0, T-1):
-                    self.index.append((k, t+1))
+            for t in range(3, T):          # <-- 최소 3스텝 과거 확보
+                self.index.append((k, t))  # tgt = t
 
-        # 정규화 통계 (한 번만 열어 계산)
         with np.load(self.path, allow_pickle=False) as f:
             all_obs = np.concatenate([f[k] for k in self.keys], axis=0).astype(np.float32)
         self.mean_in  = torch.from_numpy(all_obs.mean(0))
@@ -36,39 +33,53 @@ class NPZNextStepDataset(Dataset):
     def __len__(self): return len(self.index)
 
     def __getitem__(self, i):
-        k, tgt = self.index[i]  # tgt in [1..T-1]
-        # 안전하게 매 호출 시 파일 열기
+        k, tgt = self.index[i]             # tgt = t
         with np.load(self.path, allow_pickle=False) as f:
-            ep = f[k]  # (T,11)
+            ep = f[k]                      # (T,11)
 
-            # 최근 3스텝 복제 패딩
             frames = []
             for dt in range(PAST_N, 0, -1):
-                idx = tgt - dt
-                if idx < 0: idx = 0
+                idx = tgt - dt             # t-3, t-2, t-1
                 frames.append(ep[idx])
 
-            x = torch.from_numpy(np.stack(frames, axis=0)).float()   # (3,11)
-            y = torch.from_numpy(ep[tgt, :OUT_DIM]).float()          # (8,)
+            x = torch.from_numpy(np.stack(frames, axis=0)).float()  # (3,11)
+            y = torch.from_numpy(ep[tgt, :OUT_DIM]).float()         # (8,) = s_t[:8]
         return x, y
-class GRUForecast(nn.Module):
-    def __init__(self, hidden=256, layers=2):
-        super().__init__()
-        self.gru = nn.GRU(input_size=IN_DIM, hidden_size=hidden, num_layers=layers, batch_first=True)
-        self.head = nn.Sequential(
-            nn.Linear(hidden, hidden),
-            nn.ReLU(),
-            nn.Linear(hidden, OUT_DIM),
-        )
-    def forward(self, x):                 # x: (B,3,11)
-        h, _ = self.gru(x)                # (B,3,H)
-        return self.head(h[:, -1, :])     # (B,8)
 
+# ----------------------- Model: Transformer -----------------------
+class TransformerForecast(nn.Module):
+    def __init__(self, d_model=128, nhead=8, nlayers=2, d_ff=256, dropout=0.1):
+        super().__init__()
+        self.proj = nn.Linear(IN_DIM, d_model)
+        self.pos  = nn.Parameter(torch.zeros(1, PAST_N, d_model))  # learned positional embedding (3,d_model)
+        enc_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, nhead=nhead, dim_feedforward=d_ff,
+            dropout=dropout, batch_first=True, norm_first=True, activation="gelu"
+        )
+        self.enc = nn.TransformerEncoder(enc_layer, num_layers=nlayers)
+        self.head = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Linear(d_ff, OUT_DIM),
+        )
+
+        # xavier init
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight); nn.init.zeros_(m.bias)
+
+    def forward(self, x):            # x: (B,3,11)
+        h = self.proj(x) + self.pos  # (B,3,d_model)
+        h = self.enc(h)              # (B,3,d_model)
+        h_last = h[:, -1, :]         # (B,d_model)
+        return self.head(h_last)     # (B,8)
+
+# ----------------------- Train -----------------------
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
     ds = NPZNextStepDataset(args.data)
 
-    # split
     N = len(ds)
     n_val = max(1, int(N * args.val_ratio))
     n_tr  = N - n_val
@@ -91,8 +102,8 @@ def train(args):
     dl_tr = DataLoader(ds_tr, batch_size=args.batch, shuffle=True,  num_workers=2, pin_memory=True, collate_fn=collate)
     dl_va = DataLoader(ds_va, batch_size=args.batch, shuffle=False, num_workers=2, pin_memory=True, collate_fn=collate)
 
-    model = GRUForecast(hidden=args.hidden, layers=args.layers).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-6)
+    model = TransformerForecast(d_model=args.d_model, nhead=args.nhead, nlayers=args.layers, d_ff=args.ff, dropout=args.dropout).to(device)
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     sch = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
     loss_fn = nn.SmoothL1Loss(beta=0.01)
 
@@ -132,6 +143,7 @@ def train(args):
                os.path.join(args.out, "last.pt"))
     print(f"done. best val {best:.5f}")
 
+# ----------------------- Inference -----------------------
 @torch.no_grad()
 def predict_next8(obs_hist_3, ckpt_path, cpu=False):
     """
@@ -141,7 +153,7 @@ def predict_next8(obs_hist_3, ckpt_path, cpu=False):
     ckpt = torch.load(ckpt_path, map_location="cpu")
     cfg = ckpt["cfg"]
     device = torch.device("cpu" if cpu else ("cuda" if torch.cuda.is_available() else "cpu"))
-    model = GRUForecast(hidden=cfg["hidden"], layers=cfg["layers"]).to(device)
+    model = TransformerForecast(d_model=cfg["d_model"], nhead=cfg["nhead"], nlayers=cfg["layers"], d_ff=cfg["ff"], dropout=cfg["dropout"]).to(device)
     model.load_state_dict(ckpt["model"]); model.eval()
 
     stats = np.load(os.path.join(cfg["out"], "norm_stats.npz"))
@@ -154,18 +166,22 @@ def predict_next8(obs_hist_3, ckpt_path, cpu=False):
     x = (x - mi) / si
     y = model(x)[0]
     y = y * so + mo
-    return y.cpu().numpy()
+    return y.detach().cpu().numpy()
 
+# ----------------------- Args -----------------------
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--data", type=str, default="dataset_all_afterpregrasp_t3.npz")
     p.add_argument("--batch", type=int, default=256)
-    p.add_argument("--epochs", type=int, default=50)
+    p.add_argument("--epochs", type=int, default=100)
     p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--hidden", type=int, default=256)
+    p.add_argument("--d_model", type=int, default=128)
+    p.add_argument("--nhead", type=int, default=8)
     p.add_argument("--layers", type=int, default=2)
+    p.add_argument("--ff", type=int, default=256)
+    p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--val_ratio", type=float, default=0.1)
-    p.add_argument("--out", type=str, default="try6/next8")
+    p.add_argument("--out", type=str, default="try7/next8")
     p.add_argument("--cpu", action="store_true")
     return p.parse_args()
 

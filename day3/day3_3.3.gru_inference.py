@@ -66,6 +66,33 @@ class GRUForecast(nn.Module):
 
 from collections import deque
 import torch
+class TransformerForecast(nn.Module):
+    def __init__(self, d_model=128, nhead=8, nlayers=2, d_ff=256, dropout=0.1):
+        super().__init__()
+        self.proj = nn.Linear(IN_DIM, d_model)
+        self.pos  = nn.Parameter(torch.zeros(1, PAST_N, d_model))  # learned positional embedding (3,d_model)
+        enc_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, nhead=nhead, dim_feedforward=d_ff,
+            dropout=dropout, batch_first=True, norm_first=True, activation="gelu"
+        )
+        self.enc = nn.TransformerEncoder(enc_layer, num_layers=nlayers)
+        self.head = nn.Sequential(
+            nn.LayerNorm(d_model),
+            nn.Linear(d_model, d_ff),
+            nn.GELU(),
+            nn.Linear(d_ff, OUT_DIM),
+        )
+
+        # xavier init
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight); nn.init.zeros_(m.bias)
+
+    def forward(self, x):            # x: (B,3,11)
+        h = self.proj(x) + self.pos  # (B,3,d_model)
+        h = self.enc(h)              # (B,3,d_model)
+        h_last = h[:, -1, :]         # (B,d_model)
+        return self.head(h_last)     # (B,8)
 
 class ObsHistory:
     def __init__(self, hist_len=3):
@@ -94,33 +121,57 @@ class ObsHistory:
         return torch.stack(out, dim=0)   # (3, obs_dim)
 
 
+# @torch.no_grad()
+# def predict_next8(obs_hist_3, ckpt_path, cpu=False):
+#     ckpt = torch.load(ckpt_path, map_location="cpu")
+#     cfg = ckpt["cfg"]
+#     device = torch.device("cpu" if cpu else ("cuda" if torch.cuda.is_available() else "cpu"))
+#     model = GRUForecast(hidden=cfg["hidden"], layers=cfg["layers"]).to(device)
+#     model.load_state_dict(ckpt["model"])
+#     model.eval()
+
+#     # 정규화 파라미터
+#     stats = np.load(os.path.join(cfg["out"], "norm_stats.npz"))
+#     mi = torch.tensor(stats["mean_in"], dtype=torch.float32, device=device)
+#     si = torch.tensor(stats["std_in"], dtype=torch.float32, device=device)
+#     mo = torch.tensor(stats["mean_out"], dtype=torch.float32, device=device)
+#     so = torch.tensor(stats["std_out"], dtype=torch.float32, device=device)
+
+#     # 입력 obs_hist_3 (3,11)
+#     x = torch.as_tensor(obs_hist_3, dtype=torch.float32, device=device).unsqueeze(0)  # (1,3,11)
+#     x = (x - mi) / si
+#     y = model(x)[0]
+#     y = y * so + mo  # (8,)
+
+#     # 마지막 요소 (그리퍼 상태) sign 처리
+#     y[-1] = -1.0 if y[-1] < 0 else 1.0
+
+#     # (1,8) 형태로 반환
+#     return y.unsqueeze(0)   # torch.Tensor (1,8, device=device)
 @torch.no_grad()
-def predict_next8(obs_hist_3, ckpt_path, cpu=False):
+def predict_next8(obs_hist_3, ckpt_path, cpu=False): #for transformer
+    """
+    obs_hist_3: (3,11) 최근 3스텝(원스케일). 필요 시 호출측에서 복제 패딩해 전달.
+    반환: (8,) 원스케일.
+    """
     ckpt = torch.load(ckpt_path, map_location="cpu")
     cfg = ckpt["cfg"]
     device = torch.device("cpu" if cpu else ("cuda" if torch.cuda.is_available() else "cpu"))
-    model = GRUForecast(hidden=cfg["hidden"], layers=cfg["layers"]).to(device)
-    model.load_state_dict(ckpt["model"])
-    model.eval()
+    model = TransformerForecast(d_model=cfg["d_model"], nhead=cfg["nhead"], nlayers=cfg["layers"], d_ff=cfg["ff"], dropout=cfg["dropout"]).to(device)
+    model.load_state_dict(ckpt["model"]); model.eval()
 
-    # 정규화 파라미터
     stats = np.load(os.path.join(cfg["out"], "norm_stats.npz"))
-    mi = torch.tensor(stats["mean_in"], dtype=torch.float32, device=device)
-    si = torch.tensor(stats["std_in"], dtype=torch.float32, device=device)
-    mo = torch.tensor(stats["mean_out"], dtype=torch.float32, device=device)
-    so = torch.tensor(stats["std_out"], dtype=torch.float32, device=device)
+    mi = torch.from_numpy(stats["mean_in"]).to(device)
+    si = torch.from_numpy(stats["std_in"]).to(device)
+    mo = torch.from_numpy(stats["mean_out"]).to(device)
+    so = torch.from_numpy(stats["std_out"]).to(device)
 
-    # 입력 obs_hist_3 (3,11)
     x = torch.as_tensor(obs_hist_3, dtype=torch.float32, device=device).unsqueeze(0)  # (1,3,11)
     x = (x - mi) / si
     y = model(x)[0]
-    y = y * so + mo  # (8,)
-
-    # 마지막 요소 (그리퍼 상태) sign 처리
+    y = y * so + mo
     y[-1] = -1.0 if y[-1] < 0 else 1.0
-
-    # (1,8) 형태로 반환
-    return y.unsqueeze(0)   # torch.Tensor (1,8, device=device)
+    return y.unsqueeze(0)
 
 
 
@@ -650,7 +701,8 @@ def main():
     import isaacsim.core.utils.numpy.rotations as rot_utils
     import numpy as np
     import matplotlib.pyplot as plt
-    
+    refer_data = np.load("dataset_all_afterpregrasp_t3.npz")
+
     camera = Camera(
         prim_path="/World/camera",
         position=np.array([3.67, 0.218, 1.0]),
@@ -973,8 +1025,7 @@ def main():
                 tcp_rest_position = ee_frame_sensor.data.target_pos_w[..., 0, :].clone() - env.unwrapped.scene.env_origins
                 tcp_rest_orientation = ee_frame_sensor.data.target_quat_w[..., 0, :].clone()
                 ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
-                imitation_obs = torch.cat([ee_pose[0], pick_and_place_sm.des_gripper_state[0], env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'][0][:3]], dim=0)
-                hist.add(imitation_obs)
+                
                 # print("step = ", save_count)
                 # print(env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'])
                 # print(ee_pose)
@@ -993,12 +1044,15 @@ def main():
                 #print("ee_pose = ", ee_pose)
                 # 환경에 대한 액션을 실행
                 
+                ee_pose[0][2] -= 0.5 
+                imitation_obs = torch.cat([ee_pose[0], pick_and_place_sm.des_gripper_state[0], env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'][0][:3]], dim=0)
                 
+                hist.add(imitation_obs)
                 
                 #print("step_count = ", step_count)
                 
                 #print(f"obs = ", obs)
-                if pick_and_place_sm.sm_state >=1: #after predict
+                if pick_and_place_sm.sm_state >=3: #after predict
                     
                     
                     #print("save_count = ", save_count)
@@ -1060,12 +1114,21 @@ def main():
                     # }
                     # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
 
-                if pick_and_place_sm.sm_state >=1
+                if pick_and_place_sm.sm_state >=3:
                     obs_hist_3= hist.get()
-                    actions = predict_next8(obs_hist_3, "/AILAB-summer-school-2025/next8/best.pt")
-                
-                obs, rewards, terminated, truncated, info = env.step(actions)
+                    actions = predict_next8(obs_hist_3, "/AILAB-summer-school-2025/try7/next8/best.pt")
+                    actions = torch.tensor(actions, device="cuda:0")
+                    #actions[0][2]-=0.5
+
+
+                    #this is for loading data
+                    # actions = refer_data['episode001'][save_count][:8]
+                    
+                    # actions = torch.tensor(actions, device="cuda:0").unsqueeze(0)
+
                 print(actions)
+                obs, rewards, terminated, truncated, info = env.step(actions)
+                
                 # print("===================")
                 # print(ee_pose[0])
                 # print(obs['policy'][0])
