@@ -93,7 +93,24 @@ class TransformerForecast(nn.Module):
         h = self.enc(h)              # (B,3,d_model)
         h_last = h[:, -1, :]         # (B,d_model)
         return self.head(h_last)     # (B,8)
+class MLPPolicy(nn.Module):
+    # 입력: (B,3,11) -> flatten -> MLP -> (B,8)
+    def __init__(self, in_dim=11, win=3, hidden=256, out_dim=8):
+        super().__init__()
+        self.win = win
+        self.in_dim = in_dim
+        self.net = nn.Sequential(
+            nn.Linear(in_dim*win, hidden),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden, hidden),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden, out_dim),
+        )
 
+    def forward(self, x):  # x: (B,3,11)
+        B = x.size(0)
+        x = x.view(B, self.win * self.in_dim)  # (B,33)
+        return self.net(x)  # (B,8)
 class ObsHistory:
     def __init__(self, hist_len=3):
         self.hist_len = hist_len
@@ -161,19 +178,136 @@ def predict_next8(obs_hist_3, ckpt_path, cpu=False): #for transformer
     model.load_state_dict(ckpt["model"]); model.eval()
 
     stats = np.load(os.path.join(cfg["out"], "norm_stats.npz"))
+    #print("^^^", os.path.join(cfg["out"]))
     mi = torch.from_numpy(stats["mean_in"]).to(device)
+    print(mi.shape)
     si = torch.from_numpy(stats["std_in"]).to(device)
+    print(si.shape)
     mo = torch.from_numpy(stats["mean_out"]).to(device)
+    print(mo.shape)
     so = torch.from_numpy(stats["std_out"]).to(device)
-
+    print(so.shape)
     x = torch.as_tensor(obs_hist_3, dtype=torch.float32, device=device).unsqueeze(0)  # (1,3,11)
     x = (x - mi) / si
     y = model(x)[0]
     y = y * so + mo
     y[-1] = -1.0 if y[-1] < 0 else 1.0
     return y.unsqueeze(0)
+# ============================ if it wont work. take away under this
+def ensure_Tx11(arr):
+    if isinstance(arr, torch.Tensor):
+        arr = arr.detach().to("cpu").numpy()
+
+    a = np.asarray(arr)
+    if a.ndim == 1 and a.shape[0] == 11:
+        return a[None, :]
+    if a.ndim == 2 and a.shape[1] == 11:
+        return a
+    if a.ndim == 2 and a.shape[0] == 11:
+        return a.T
+    raise ValueError(f"history shape invalid: {a.shape}")
+
+def make_window(ep, t):
+    """규칙대로 (3,11) 윈도우 생성. ep: (T,11)"""
+    if t == 0:
+        w = np.stack([ep[0], ep[0], ep[0]], axis=0)
+    elif t == 1:
+        w = np.stack([ep[0], ep[0], ep[0]], axis=0)  # 지시사항: 2번째 스텝 예측도 1번째 3번 복제
+    elif t == 2:
+        w = np.stack([ep[0], ep[1], ep[1]], axis=0)  # 지시사항: 1번째 1회 + 2번째 2회
+    else:
+        w = ep[t-3:t, :]
+    return w  # (3,11)
+
+class ColumnStandardizer:
+    def __init__(self, dim):
+        self.mu = np.zeros(dim, dtype=np.float64)
+        self.std = np.ones(dim, dtype=np.float64)
+
+    def fit(self, X):
+        # X: (N, dim) or (..., dim)
+        X2 = X.reshape(-1, X.shape[-1]).astype(np.float64)
+        self.mu = X2.mean(axis=0)
+        self.std = X2.std(axis=0)
+        self.std[self.std < 1e-8] = 1.0  # 분산 0 보호
+
+    def transform(self, X):
+        return (X - self.mu) / self.std
+
+    def inverse(self, Xn):
+        return Xn * self.std + self.mu
+
+    def state(self):
+        return {"mu": self.mu.tolist(), "std": self.std.tolist()}
 
 
+def load_norm(state):
+    sd_x = np.array(state["x_norm"]["mu"], dtype=np.float64)
+    sd_y = np.array(state["y_norm"]["mu"], dtype=np.float64)  # not used here
+    # 이미 ColumnStandardizer 상태 저장했으므로 그대로 복원
+    nx = ColumnStandardizer(11)
+    ny = ColumnStandardizer(8)
+    nx.mu = np.array(state["x_norm"]["mu"], dtype=np.float64)
+    nx.std = np.array(state["x_norm"]["std"], dtype=np.float64)
+    ny.mu = np.array(state["y_norm"]["mu"], dtype=np.float64)
+    ny.std = np.array(state["y_norm"]["std"], dtype=np.float64)
+    return nx, ny
+
+def predict_action(model, x_norm, y_norm, history_ks):
+    """
+    history_ks: numpy array of shape (k,11), k in {1,2,3}
+    규칙에 맞춰 (3,11)로 만들고 정규화하여 예측. 반환은 비정규화된 (8,)
+    """
+    # CUDA 텐서 대비
+    if isinstance(history_ks, torch.Tensor):
+        history_ks = history_ks.detach().to("cpu").numpy()
+
+    hist = ensure_Tx11(history_ks)   # (k,11)
+    if hist.shape[0] == 1:
+        X = np.stack([hist[0], hist[0], hist[0]], axis=0)
+    elif hist.shape[0] == 2:
+        X = np.stack([hist[0], hist[1], hist[1]], axis=0)
+    else:
+        X = hist[-3:, :]
+
+    Xn = x_norm.transform(X).astype(np.float32)
+    xt = torch.from_numpy(Xn)[None, ...].to(next(model.parameters()).device)  # (1,3,11)
+    with torch.no_grad():
+        yn = model(xt).cpu().numpy()[0]       # (8,)
+    y = y_norm.inverse(yn)
+    y[-1] = -1.0 if y[-1] < 0 else 1.0
+    return y                                   # (8,)
+class GRUPolicy(nn.Module):
+    # 입력: (B,3,11) -> GRU -> head -> (B,8)
+    def __init__(self, in_dim=11, hidden=128, out_dim=8, num_layers=1):
+        super().__init__()
+        self.gru = nn.GRU(input_size=in_dim, hidden_size=hidden, num_layers=num_layers, batch_first=True)
+        self.head = nn.Sequential(
+            nn.Linear(hidden, hidden),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden, out_dim),
+        )
+
+    def forward(self, x):  # x: (B,3,11)
+        h, _ = self.gru(x)
+        last = h[:, -1, :]
+        return self.head(last)  # (B,8)
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+HIDDEN = 128
+SEED = 42
+
+# ckpt = torch.load("il_mlp_best3.pt", map_location=DEVICE)
+
+# model = MLPPolicy(in_dim=11, win=3, hidden=256, out_dim=8).to(DEVICE)
+# model.load_state_dict(ckpt["model"])
+ckpt = torch.load("il_gru_best3.pt", map_location=DEVICE)
+
+model = GRUPolicy(in_dim=11, hidden=HIDDEN, out_dim=8).to(DEVICE)
+model.load_state_dict(ckpt["model"])
+x_norm_re, y_norm_re = load_norm({
+    "x_norm": ckpt["x_norm"],
+    "y_norm": ckpt["y_norm"],
+})
 
 
 import argparse
@@ -766,7 +900,7 @@ def main():
     # Create a directory for saving logs
     # log_dir = f"simulation_logs_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     # os.makedirs(log_dir, exist_ok=True)    
-    max_steps_per_traj=500
+    max_steps_per_traj=700
     max_trajectories=50
     total_traj = 0
     dataset = {
@@ -1044,10 +1178,10 @@ def main():
                 #print("ee_pose = ", ee_pose)
                 # 환경에 대한 액션을 실행
                 
-                ee_pose[0][2] -= 0.5 
+                #ee_pose[0][2] -= 0.5 
                 imitation_obs = torch.cat([ee_pose[0], pick_and_place_sm.des_gripper_state[0], env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'][0][:3]], dim=0)
+                # hist.add(imitation_obs)
                 
-                hist.add(imitation_obs)
                 
                 #print("step_count = ", step_count)
                 
@@ -1114,21 +1248,24 @@ def main():
                     # }
                     # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
 
-                if pick_and_place_sm.sm_state >=3:
-                    obs_hist_3= hist.get()
-                    actions = predict_next8(obs_hist_3, "/AILAB-summer-school-2025/try7/next8/best.pt")
-                    actions = torch.tensor(actions, device="cuda:0")
-                    #actions[0][2]-=0.5
-
-
+                if pick_and_place_sm.sm_state >= 3: #baseline : 3
+                    hist.add(imitation_obs)
+                    obs_hist_3 = hist.get()
+                    #actions = predict_next8(obs_hist_3, "/AILAB-summer-school-2025/try7/next8/best.pt")
+                    actions = predict_action(model, x_norm_re, y_norm_re, obs_hist_3)
+                    #actions = torch.tensor(actions, device="cuda:0")
+                    
+                    # actions = predict_action(model, x_norm_re, y_norm_re,obs_hist_3)
+                    # print("*************")
+                    # print(actions)
+                    # print("*************")
                     #this is for loading data
                     # actions = refer_data['episode001'][save_count][:8]
-                    
-                    # actions = torch.tensor(actions, device="cuda:0").unsqueeze(0)
+                    actions = torch.tensor(actions, device="cuda:0").unsqueeze(0)
 
                 print(actions)
                 obs, rewards, terminated, truncated, info = env.step(actions)
-                
+                #print(obs)
                 # print("===================")
                 # print(ee_pose[0])
                 # print(obs['policy'][0])
