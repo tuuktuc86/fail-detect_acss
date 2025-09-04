@@ -622,7 +622,7 @@ def main():
     # log_dir = f"simulation_logs_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     # os.makedirs(log_dir, exist_ok=True)    
     max_steps_per_traj=550
-    max_trajectories=200
+    max_trajectories=1000
 
 
 
@@ -978,10 +978,10 @@ def main():
                 #     t = torch.as_tensor(load_ee_pose, device=actions.device, dtype=actions.dtype)
                 #     with torch.no_grad():
                 #         actions[0][0:7].copy_(t[save_count-1])    
-                if pick_and_place_sm.sm_state >=3:  
-                    print("********")    
-                    print(actions)
-                    print(ee_pose[0])
+                # if pick_and_place_sm.sm_state >=3:  
+                    # print("********")    
+                    # print(actions)
+                    # print(ee_pose[0])
                 obs, rewards, terminated, truncated, info = env.step(actions)
                 
                 # print("===================")

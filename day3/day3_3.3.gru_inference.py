@@ -253,16 +253,39 @@ def load_norm(state):
     ny.std = np.array(state["y_norm"]["std"], dtype=np.float64)
     return nx, ny
 
-def predict_action(model, x_norm, y_norm, history_ks):
+# def predict_action(model, x_norm, y_norm, history_ks):
+#     """
+#     history_ks: numpy array of shape (k,11), k in {1,2,3}
+#     규칙에 맞춰 (3,11)로 만들고 정규화하여 예측. 반환은 비정규화된 (8,)
+#     """
+#     # CUDA 텐서 대비
+#     if isinstance(history_ks, torch.Tensor):
+#         history_ks = history_ks.detach().to("cpu").numpy()
+
+#     hist = ensure_Tx11(history_ks)   # (k,11)
+#     if hist.shape[0] == 1:
+#         X = np.stack([hist[0], hist[0], hist[0]], axis=0)
+#     elif hist.shape[0] == 2:
+#         X = np.stack([hist[0], hist[1], hist[1]], axis=0)
+#     else:
+#         X = hist[-3:, :]
+
+#     Xn = x_norm.transform(X).astype(np.float32)
+#     xt = torch.from_numpy(Xn)[None, ...].to(next(model.parameters()).device)  # (1,3,11)
+#     with torch.no_grad():
+#         yn = model(xt).cpu().numpy()[0]       # (8,)
+#     y = y_norm.inverse(yn)
+#     y[-1] = -1.0 if y[-1] < 0 else 1.0
+#     return y                                   # (8,)
+
+
+def predict_action(model, history_ks):
     """
     history_ks: numpy array of shape (k,11), k in {1,2,3}
     규칙에 맞춰 (3,11)로 만들고 정규화하여 예측. 반환은 비정규화된 (8,)
     """
     # CUDA 텐서 대비
-    if isinstance(history_ks, torch.Tensor):
-        history_ks = history_ks.detach().to("cpu").numpy()
-
-    hist = ensure_Tx11(history_ks)   # (k,11)
+    hist = ensure_Tx11(history_ks)
     if hist.shape[0] == 1:
         X = np.stack([hist[0], hist[0], hist[0]], axis=0)
     elif hist.shape[0] == 2:
@@ -270,13 +293,15 @@ def predict_action(model, x_norm, y_norm, history_ks):
     else:
         X = hist[-3:, :]
 
-    Xn = x_norm.transform(X).astype(np.float32)
-    xt = torch.from_numpy(Xn)[None, ...].to(next(model.parameters()).device)  # (1,3,11)
-    with torch.no_grad():
-        yn = model(xt).cpu().numpy()[0]       # (8,)
-    y = y_norm.inverse(yn)
+    xt = torch.from_numpy(X.astype(np.float32))[None, ...].to(DEVICE)  # (1,3,11)
+    y  = model(xt)[0].detach().cpu().numpy()     
+   
+    
     y[-1] = -1.0 if y[-1] < 0 else 1.0
-    return y                                   # (8,)
+    return y 
+
+
+
 class GRUPolicy(nn.Module):
     # 입력: (B,3,11) -> GRU -> head -> (B,8)
     def __init__(self, in_dim=11, hidden=128, out_dim=8, num_layers=1):
@@ -296,18 +321,22 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 HIDDEN = 128
 SEED = 42
 
-# ckpt = torch.load("il_mlp_best3.pt", map_location=DEVICE)
-
+# ckpt = torch.load("il_gru_best4_nonnorm.pt", map_location=DEVICE)
 # model = MLPPolicy(in_dim=11, win=3, hidden=256, out_dim=8).to(DEVICE)
 # model.load_state_dict(ckpt["model"])
-ckpt = torch.load("il_gru_best3.pt", map_location=DEVICE)
 
+ckpt = torch.load("il_gru_best4_nonnorm.pt", map_location=DEVICE, weights_only=True)
 model = GRUPolicy(in_dim=11, hidden=HIDDEN, out_dim=8).to(DEVICE)
-model.load_state_dict(ckpt["model"])
-x_norm_re, y_norm_re = load_norm({
-    "x_norm": ckpt["x_norm"],
-    "y_norm": ckpt["y_norm"],
-})
+model.load_state_dict(ckpt["model"], strict=True)
+
+# ckpt = torch.load("il_gru_best3.pt", map_location=DEVICE)
+
+# model = GRUPolicy(in_dim=11, hidden=HIDDEN, out_dim=8).to(DEVICE)
+# model.load_state_dict(ckpt["model"])
+# x_norm_re, y_norm_re = load_norm({
+#     "x_norm": ckpt["x_norm"],
+#     "y_norm": ckpt["y_norm"],
+# })
 
 
 import argparse
@@ -900,7 +929,7 @@ def main():
     # Create a directory for saving logs
     # log_dir = f"simulation_logs_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     # os.makedirs(log_dir, exist_ok=True)    
-    max_steps_per_traj=700
+    max_steps_per_traj=1500
     max_trajectories=50
     total_traj = 0
     dataset = {
@@ -1252,7 +1281,8 @@ def main():
                     hist.add(imitation_obs)
                     obs_hist_3 = hist.get()
                     #actions = predict_next8(obs_hist_3, "/AILAB-summer-school-2025/try7/next8/best.pt")
-                    actions = predict_action(model, x_norm_re, y_norm_re, obs_hist_3)
+                    #actions = predict_action(model, x_norm_re, y_norm_re, obs_hist_3)
+                    actions = predict_action(model, obs_hist_3)
                     #actions = torch.tensor(actions, device="cuda:0")
                     
                     # actions = predict_action(model, x_norm_re, y_norm_re,obs_hist_3)
