@@ -36,7 +36,7 @@ simulation_app = app_launcher.app
 from isaaclab_tasks.utils.parse_cfg import parse_env_cfg
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import subtract_frame_transforms
-import omni.kit.viewport.utility as viewport_utils
+#import omni.kit.viewport.utility as viewport_utils #use this wha
 
 # AILAB-summer-school-2025/cgnet 폴더에 접근하기 위한 시스템 파일 경로 추가
 import sys
@@ -509,7 +509,10 @@ def main():
     # random.shuffle(pick_order)
     # chosen_selected_names = pick_order.copy()  # Copy for saving (original shuffled order)
     
-    env.reset()
+    obs, _ = env.reset()
+    cam = env.scene.sensors["front_cam"]
+    rgb = cam.get_image("rgb")
+    depth = cam.get_image("depth")
     print(f"Environment reset. Number of environments: {env.unwrapped.num_envs}")
     
     # 환경 관측 카메라 시점 셋팅
@@ -527,6 +530,7 @@ def main():
         prim_path="/World/camera",
         position=np.array([3.67, 0.218, 1.0]),
         frequency=50,
+        pdate_period=env_cfg.sim.dt,
         resolution=(640, 480),
         orientation = rot_utils.euler_angles_to_quats(np.array([0, 88, 90]), degrees=True),)
     camera.set_world_pose(np.array([3.7245, 0.218, 1.053]), rot_utils.euler_angles_to_quats(np.array([88, 0, 90]), degrees=True), camera_axes="usd")
@@ -537,6 +541,7 @@ def main():
         prim_path="/World/camera2",
         position=np.array([0.16304, 0.4922, 5]),
         frequency=50,
+        pdate_period=env_cfg.sim.dt,
         resolution=(640, 480),
         orientation = rot_utils.euler_angles_to_quats(np.array([0, 0, -90]), degrees=True),)
     camera2.set_world_pose(np.array([0.16304, 0.4922, 5]), rot_utils.euler_angles_to_quats(np.array([0, 0, -90]), degrees=True), camera_axes="usd")

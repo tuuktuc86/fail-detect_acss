@@ -1,347 +1,3 @@
-# train_ssl_3to1_11in_8out.py
-import argparse, os, math
-import numpy as np
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-
-IN_DIM  = 11
-OUT_DIM = 8
-PAST_N  = 3
-WIN=7
-class NPZNextStepDataset(Dataset):
-    def __init__(self, npz_path: str):
-        self.path  = npz_path
-        # 키/길이만 1회 읽고 닫기
-        with np.load(self.path, allow_pickle=False) as f:
-            self.keys = sorted(f.files)
-            self.lens = {k: f[k].shape[0] for k in self.keys}
-
-        # 인덱스 구축 (target = t+1)
-        self.index = []
-        for k in self.keys:
-            T = self.lens[k]
-            if T >= 2:
-                for t in range(0, T-1):
-                    self.index.append((k, t+1))
-
-        # 정규화 통계 (한 번만 열어 계산)
-        with np.load(self.path, allow_pickle=False) as f:
-            all_obs = np.concatenate([f[k] for k in self.keys], axis=0).astype(np.float32)
-        self.mean_in  = torch.from_numpy(all_obs.mean(0))
-        self.std_in   = torch.from_numpy(all_obs.std(0) + 1e-6)
-        self.mean_out = self.mean_in[:OUT_DIM].clone()
-        self.std_out  = self.std_in[:OUT_DIM].clone()
-
-    def __len__(self): return len(self.index)
-
-    def __getitem__(self, i):
-        k, tgt = self.index[i]  # tgt in [1..T-1]
-        # 안전하게 매 호출 시 파일 열기
-        with np.load(self.path, allow_pickle=False) as f:
-            ep = f[k]  # (T,11)
-
-            # 최근 3스텝 복제 패딩
-            frames = []
-            for dt in range(PAST_N, 0, -1):
-                idx = tgt - dt
-                if idx < 0: idx = 0
-                frames.append(ep[idx])
-
-            x = torch.from_numpy(np.stack(frames, axis=0)).float()   # (3,11)
-            y = torch.from_numpy(ep[tgt, :OUT_DIM]).float()          # (8,)
-        return x, y
-class GRUForecast(nn.Module):
-    def __init__(self, hidden=256, layers=2):
-        super().__init__()
-        self.gru = nn.GRU(input_size=IN_DIM, hidden_size=hidden, num_layers=layers, batch_first=True)
-        self.head = nn.Sequential(
-            nn.Linear(hidden, hidden),
-            nn.ReLU(),
-            nn.Linear(hidden, OUT_DIM),
-        )
-    def forward(self, x):                 # x: (B,3,11)
-        h, _ = self.gru(x)                # (B,3,H)
-        return self.head(h[:, -1, :])     # (B,8)
-
-from collections import deque
-import torch
-class TransformerForecast(nn.Module):
-    def __init__(self, d_model=128, nhead=8, nlayers=2, d_ff=256, dropout=0.1):
-        super().__init__()
-        self.proj = nn.Linear(IN_DIM, d_model)
-        self.pos  = nn.Parameter(torch.zeros(1, PAST_N, d_model))  # learned positional embedding (3,d_model)
-        enc_layer = nn.TransformerEncoderLayer(
-            d_model=d_model, nhead=nhead, dim_feedforward=d_ff,
-            dropout=dropout, batch_first=True, norm_first=True, activation="gelu"
-        )
-        self.enc = nn.TransformerEncoder(enc_layer, num_layers=nlayers)
-        self.head = nn.Sequential(
-            nn.LayerNorm(d_model),
-            nn.Linear(d_model, d_ff),
-            nn.GELU(),
-            nn.Linear(d_ff, OUT_DIM),
-        )
-
-        # xavier init
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight); nn.init.zeros_(m.bias)
-
-    def forward(self, x):            # x: (B,3,11)
-        h = self.proj(x) + self.pos  # (B,3,d_model)
-        h = self.enc(h)              # (B,3,d_model)
-        h_last = h[:, -1, :]         # (B,d_model)
-        return self.head(h_last)     # (B,8)
-class MLPPolicy(nn.Module):
-    def __init__(self, in_dim=11, win=WIN, hidden=256, out_dim=8):
-        super().__init__()
-        self.win = win
-        self.in_dim = in_dim
-        self.net = nn.Sequential(
-            nn.Linear(in_dim * win, hidden),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden, hidden),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden, out_dim),
-        )
-
-    def forward(self, x):  # x: (B,WIN,11)
-        B = x.size(0)
-        x = x.view(B, self.win * self.in_dim)  # (B, 11*WIN)
-        return self.net(x)
-class ObsHistory:
-    def __init__(self, hist_len=10):
-        self.hist_len = int(hist_len)
-        self.buffer = deque(maxlen=self.hist_len)
-
-    def add(self, obs: torch.Tensor):
-        """obs: (obs_dim,) 1D tensor"""
-        if obs.ndim != 1:
-            raise ValueError(f"obs must be 1D, got {tuple(obs.shape)}")
-        self.buffer.append(obs.detach().clone())
-
-    def get(self) -> torch.Tensor:
-        """return (hist_len, obs_dim) with right padding by last obs"""
-        n = len(self.buffer)
-        if n == 0:
-            raise ValueError("No obs in buffer yet!")
-
-        buf = list(self.buffer)                  # oldest -> newest
-        if n < self.hist_len:
-            last = buf[-1]
-            buf.extend(last.detach().clone() for _ in range(self.hist_len - n))
-        else:
-            buf = buf[-self.hist_len:]           # just in case
-
-        return torch.stack(buf, dim=0)           # (hist_len, obs_dim)
-
-    def clear(self):
-        self.buffer.clear()
-
-
-# @torch.no_grad()
-# def predict_next8(obs_hist_3, ckpt_path, cpu=False):
-#     ckpt = torch.load(ckpt_path, map_location="cpu")
-#     cfg = ckpt["cfg"]
-#     device = torch.device("cpu" if cpu else ("cuda" if torch.cuda.is_available() else "cpu"))
-#     model = GRUForecast(hidden=cfg["hidden"], layers=cfg["layers"]).to(device)
-#     model.load_state_dict(ckpt["model"])
-#     model.eval()
-
-#     # 정규화 파라미터
-#     stats = np.load(os.path.join(cfg["out"], "norm_stats.npz"))
-#     mi = torch.tensor(stats["mean_in"], dtype=torch.float32, device=device)
-#     si = torch.tensor(stats["std_in"], dtype=torch.float32, device=device)
-#     mo = torch.tensor(stats["mean_out"], dtype=torch.float32, device=device)
-#     so = torch.tensor(stats["std_out"], dtype=torch.float32, device=device)
-
-#     # 입력 obs_hist_3 (3,11)
-#     x = torch.as_tensor(obs_hist_3, dtype=torch.float32, device=device).unsqueeze(0)  # (1,3,11)
-#     x = (x - mi) / si
-#     y = model(x)[0]
-#     y = y * so + mo  # (8,)
-
-#     # 마지막 요소 (그리퍼 상태) sign 처리
-#     y[-1] = -1.0 if y[-1] < 0 else 1.0
-
-#     # (1,8) 형태로 반환
-#     return y.unsqueeze(0)   # torch.Tensor (1,8, device=device)
-@torch.no_grad()
-def predict_next8(obs_hist_3, ckpt_path, cpu=False): #for transformer
-    """
-    obs_hist_3: (3,11) 최근 3스텝(원스케일). 필요 시 호출측에서 복제 패딩해 전달.
-    반환: (8,) 원스케일.
-    """
-    ckpt = torch.load(ckpt_path, map_location="cpu")
-    cfg = ckpt["cfg"]
-    device = torch.device("cpu" if cpu else ("cuda" if torch.cuda.is_available() else "cpu"))
-    model = TransformerForecast(d_model=cfg["d_model"], nhead=cfg["nhead"], nlayers=cfg["layers"], d_ff=cfg["ff"], dropout=cfg["dropout"]).to(device)
-    model.load_state_dict(ckpt["model"]); model.eval()
-
-    stats = np.load(os.path.join(cfg["out"], "norm_stats.npz"))
-    #print("^^^", os.path.join(cfg["out"]))
-    mi = torch.from_numpy(stats["mean_in"]).to(device)
-    print(mi.shape)
-    si = torch.from_numpy(stats["std_in"]).to(device)
-    print(si.shape)
-    mo = torch.from_numpy(stats["mean_out"]).to(device)
-    print(mo.shape)
-    so = torch.from_numpy(stats["std_out"]).to(device)
-    print(so.shape)
-    x = torch.as_tensor(obs_hist_3, dtype=torch.float32, device=device).unsqueeze(0)  # (1,3,11)
-    x = (x - mi) / si
-    y = model(x)[0]
-    y = y * so + mo
-    y[-1] = -1.0 if y[-1] < 0 else 1.0
-    return y.unsqueeze(0)
-# ============================ if it wont work. take away under this
-def ensure_Tx11(arr):
-    if isinstance(arr, torch.Tensor):
-        arr = arr.detach().to("cpu").numpy()
-
-    a = np.asarray(arr)
-    if a.ndim == 1 and a.shape[0] == 11:
-        return a[None, :]
-    if a.ndim == 2 and a.shape[1] == 11:
-        return a
-    if a.ndim == 2 and a.shape[0] == 11:
-        return a.T
-    raise ValueError(f"history shape invalid: {a.shape}")
-
-def make_window(ep, t, win=WIN):
-    """
-    ep: (T, 11), t: 예측 시점
-    규칙: ep[max(0,t-win):t]을 가져오고, 길이가 win보다 작으면 마지막 행을 반복해 오른쪽 패딩.
-    t=0이면 ep[0]을 win번 복제.
-    결과 shape: (win, 11)
-    """
-    if t <= 0:
-        w = np.repeat(ep[0:1, :], win, axis=0)
-        return w
-    seq = ep[max(0, t - win): t, :]        # 과거 시퀀스
-    if seq.shape[0] == 0:
-        base = ep[0:1, :]
-    else:
-        base = seq
-    if base.shape[0] < win:
-        pad = np.repeat(base[-1:, :], win - base.shape[0], axis=0)
-        w = np.concatenate([base, pad], axis=0)
-    else:
-        w = base
-    return w  # (win, 11)
-
-class ColumnStandardizer:
-    def __init__(self, dim):
-        self.mu = np.zeros(dim, dtype=np.float64)
-        self.std = np.ones(dim, dtype=np.float64)
-
-    def fit(self, X):
-        # X: (N, dim) or (..., dim)
-        X2 = X.reshape(-1, X.shape[-1]).astype(np.float64)
-        self.mu = X2.mean(axis=0)
-        self.std = X2.std(axis=0)
-        self.std[self.std < 1e-8] = 1.0  # 분산 0 보호
-
-    def transform(self, X):
-        return (X - self.mu) / self.std
-
-    def inverse(self, Xn):
-        return Xn * self.std + self.mu
-
-    def state(self):
-        return {"mu": self.mu.tolist(), "std": self.std.tolist()}
-
-
-def load_norm(state):
-    sd_x = np.array(state["x_norm"]["mu"], dtype=np.float64)
-    sd_y = np.array(state["y_norm"]["mu"], dtype=np.float64)  # not used here
-    # 이미 ColumnStandardizer 상태 저장했으므로 그대로 복원
-    nx = ColumnStandardizer(11)
-    ny = ColumnStandardizer(8)
-    nx.mu = np.array(state["x_norm"]["mu"], dtype=np.float64)
-    nx.std = np.array(state["x_norm"]["std"], dtype=np.float64)
-    ny.mu = np.array(state["y_norm"]["mu"], dtype=np.float64)
-    ny.std = np.array(state["y_norm"]["std"], dtype=np.float64)
-    return nx, ny
-
-# def predict_action(model, x_norm, y_norm, history_ks):
-#     """
-#     history_ks: numpy array of shape (k,11), k in {1,2,3}
-#     규칙에 맞춰 (3,11)로 만들고 정규화하여 예측. 반환은 비정규화된 (8,)
-#     """
-#     # CUDA 텐서 대비
-#     if isinstance(history_ks, torch.Tensor):
-#         history_ks = history_ks.detach().to("cpu").numpy()
-
-#     hist = ensure_Tx11(history_ks)   # (k,11)
-#     if hist.shape[0] == 1:
-#         X = np.stack([hist[0], hist[0], hist[0]], axis=0)
-#     elif hist.shape[0] == 2:
-#         X = np.stack([hist[0], hist[1], hist[1]], axis=0)
-#     else:
-#         X = hist[-3:, :]
-
-#     Xn = x_norm.transform(X).astype(np.float32)
-#     xt = torch.from_numpy(Xn)[None, ...].to(next(model.parameters()).device)  # (1,3,11)
-#     with torch.no_grad():
-#         yn = model(xt).cpu().numpy()[0]       # (8,)
-#     y = y_norm.inverse(yn)
-#     y[-1] = -1.0 if y[-1] < 0 else 1.0
-#     return y                                   # (8,)
-
-
-@torch.no_grad()
-def predict_action(model, history_ks):
-    hist = ensure_Tx11(history_ks)          # (T,11)
-    # 과거 T에서 t 시점은 마지막 행으로 간주. make_window 규칙 재사용:
-    X = make_window(hist, t=hist.shape[0], win=WIN)  # (WIN,11)
-    xt = torch.from_numpy(X.astype(np.float32))[None, ...].to(DEVICE)  # (1,WIN,11)
-    y  = model(xt)[0].detach().cpu().numpy()  # (8,)
-   
-    
-    y[-1] = -1.0 if y[-1] < 0 else 1.0
-    return y 
-
-
-
-class GRUPolicy(nn.Module):
-    # 입력: (B,3,11) -> GRU -> head -> (B,8)
-    def __init__(self, in_dim=11, hidden=128, out_dim=8, num_layers=1):
-        super().__init__()
-        self.gru = nn.GRU(input_size=in_dim, hidden_size=hidden, num_layers=num_layers, batch_first=True)
-        self.head = nn.Sequential(
-            nn.Linear(hidden, hidden),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden, out_dim),
-        )
-
-    def forward(self, x):  # x: (B,3,11)
-        h, _ = self.gru(x)
-        last = h[:, -1, :]
-        return self.head(last)  # (B,8)
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-HIDDEN = 128
-SEED = 42
-
-# ckpt = torch.load("il_gru_best6_nonnorm.pt", map_location=DEVICE)
-# model = MLPPolicy(in_dim=11, win=WIN, hidden=256, out_dim=8).to(DEVICE)
-# model.load_state_dict(ckpt["model"])
-
-ckpt = torch.load("il_gru_best7_nonnorm.pt", map_location=DEVICE, weights_only=True)
-model = GRUPolicy(in_dim=11, hidden=HIDDEN, out_dim=8).to(DEVICE)
-model.load_state_dict(ckpt["model"], strict=True)
-
-# ckpt = torch.load("il_gru_best3.pt", map_location=DEVICE)
-
-# model = GRUPolicy(in_dim=11, hidden=HIDDEN, out_dim=8).to(DEVICE)
-# model.load_state_dict(ckpt["model"])
-# x_norm_re, y_norm_re = load_norm({
-#     "x_norm": ckpt["x_norm"],
-#     "y_norm": ckpt["y_norm"],
-# })
-
-
 import argparse
 import os
 import datetime
@@ -380,7 +36,7 @@ simulation_app = app_launcher.app
 from isaaclab_tasks.utils.parse_cfg import parse_env_cfg
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import subtract_frame_transforms
-import omni.kit.viewport.utility as viewport_utils
+#import omni.kit.viewport.utility as viewport_utils #use this wha
 
 # AILAB-summer-school-2025/cgnet 폴더에 접근하기 위한 시스템 파일 경로 추가
 import sys
@@ -838,7 +494,6 @@ def main():
         num_envs=num_envs,
         use_fabric=not args_cli.disable_fabric,
     )
-    hist = ObsHistory(hist_len=WIN)
 
     user_text = None
 
@@ -867,12 +522,12 @@ def main():
     import isaacsim.core.utils.numpy.rotations as rot_utils
     import numpy as np
     import matplotlib.pyplot as plt
-    refer_data = np.load("dataset_all_afterpregrasp_t3.npz")
-
+    
     camera = Camera(
         prim_path="/World/camera",
         position=np.array([3.67, 0.218, 1.0]),
         frequency=50,
+        pdate_period=env_cfg.sim.dt,
         resolution=(640, 480),
         orientation = rot_utils.euler_angles_to_quats(np.array([0, 88, 90]), degrees=True),)
     camera.set_world_pose(np.array([3.7245, 0.218, 1.053]), rot_utils.euler_angles_to_quats(np.array([88, 0, 90]), degrees=True), camera_axes="usd")
@@ -883,6 +538,7 @@ def main():
         prim_path="/World/camera2",
         position=np.array([0.16304, 0.4922, 5]),
         frequency=50,
+        pdate_period=env_cfg.sim.dt,
         resolution=(640, 480),
         orientation = rot_utils.euler_angles_to_quats(np.array([0, 0, -90]), degrees=True),)
     camera2.set_world_pose(np.array([0.16304, 0.4922, 5]), rot_utils.euler_angles_to_quats(np.array([0, 0, -90]), degrees=True), camera_axes="usd")
@@ -932,7 +588,7 @@ def main():
     # Create a directory for saving logs
     # log_dir = f"simulation_logs_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
     # os.makedirs(log_dir, exist_ok=True)    
-    max_steps_per_traj=1500
+    max_steps_per_traj=500
     max_trajectories=50
     total_traj = 0
     dataset = {
@@ -1192,6 +848,7 @@ def main():
                 tcp_rest_orientation = ee_frame_sensor.data.target_quat_w[..., 0, :].clone()
                 ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
                 
+
                 # print("step = ", save_count)
                 # print(env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'])
                 # print(ee_pose)
@@ -1210,15 +867,12 @@ def main():
                 #print("ee_pose = ", ee_pose)
                 # 환경에 대한 액션을 실행
                 
-                #ee_pose[0][2] -= 0.5 
-                imitation_obs = torch.cat([ee_pose[0], pick_and_place_sm.des_gripper_state[0], env.unwrapped.unwrapped.scene.state['rigid_object']['object_0']['root_pose'][0][:3]], dim=0)
-                # hist.add(imitation_obs)
                 
                 
                 #print("step_count = ", step_count)
                 
                 #print(f"obs = ", obs)
-                if pick_and_place_sm.sm_state >=3: #after predict
+                if pick_and_place_sm.sm_state >=1: #after predict
                     
                     
                     #print("save_count = ", save_count)
@@ -1280,25 +934,9 @@ def main():
                     # }
                     # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
 
-                if pick_and_place_sm.sm_state >= 3: #baseline : 3
-                    hist.add(imitation_obs)
-                    obs_hist_3 = hist.get()
-                    #actions = predict_next8(obs_hist_3, "/AILAB-summer-school-2025/try7/next8/best.pt")
-                    #actions = predict_action(model, x_norm_re, y_norm_re, obs_hist_3)
-                    actions = predict_action(model, obs_hist_3)
-                    #actions = torch.tensor(actions, device="cuda:0")
-                    
-                    # actions = predict_action(model, x_norm_re, y_norm_re,obs_hist_3)
-                    # print("*************")
-                    # print(actions)
-                    # print("*************")
-                    #this is for loading data
-                    # actions = refer_data['episode001'][save_count][:8]
-                    actions = torch.tensor(actions, device="cuda:0").unsqueeze(0)
 
-                print(actions)
                 obs, rewards, terminated, truncated, info = env.step(actions)
-                #print(obs)
+                print(actions)
                 # print("===================")
                 # print(ee_pose[0])
                 # print(obs['policy'][0])
