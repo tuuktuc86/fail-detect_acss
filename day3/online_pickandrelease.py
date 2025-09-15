@@ -1,19 +1,15 @@
 import argparse
-import os
 import torch
+import torch.nn as nn
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
 import gymnasium as gym
-# o3d.visualization.Visualizer().destroy_window() #rendering X 
-import matplotlib.pyplot as plt
+
 
 # Isaac Lab 관련 라이브러리 임포트
 from isaaclab.app import AppLauncher
-
-import torch
-import torch.nn as nn
 
 
 # Argparse로 CLI 인자 파싱 및 Omniverse 앱 실행
@@ -29,18 +25,6 @@ simulation_app = app_launcher.app
 
 from isaaclab_tasks.utils.parse_cfg import parse_env_cfg
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils.math import subtract_frame_transforms
-#import omni.kit.viewport.utility as viewport_utils #use this wha
-
-# AILAB-summer-school-2025/cgnet 폴더에 접근하기 위한 시스템 파일 경로 추가
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# 카메라 렌더링 옵션 --enable_cameras flag 를 대신하기 위함
-# import carb
-# carb_settings_iface = carb.settings.get_settings()
-# carb_settings_iface.set_bool("/isaaclab/cameras_enabled", True)
 
 
 # 커스텀 환경 시뮬레이션 환경 config 파일 임포트
@@ -58,13 +42,10 @@ gym.register(
 )
 
 
-
-#refer_data = np.load("dataset_all_afterpregrasp_t3.npz")
-
 def main():
     """메인 함수"""
     # 환경 갯수(1개로 고정)
-    num_envs = 1
+    num_envs = 2
 
     # 환경 및 설정 파싱
     env_cfg: YCBPickPlaceEnvCfg = parse_env_cfg(
@@ -138,23 +119,14 @@ def main():
 
             obs, rewards, terminated, truncated, info = env.step(actions)
             
-            print(f"actions={actions}")
-            print(f"ee_pose={ee_pose}")
-            print(f"rewards={rewards}")
 
-            
-            # p = (0.4, 0.0, 0.53)          # 월드 좌표
-            # c = (1.0, 0.0, 0.0, 1.0)     # RGBA 빨강
-            # s = 20                       # 픽셀 크기(가시성 위해 크게)
-
-            # draw.draw_points([p], [c], [s])
 
             prev = actions 
             step_count += 1
 
             # 시뮬레이션 종료 여부 체크
             dones = terminated | truncated
-            if dones:
+            if all(dones):
                 done = True
                 if terminated:
                     print("Episode terminated")
