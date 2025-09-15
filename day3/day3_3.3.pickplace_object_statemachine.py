@@ -1,21 +1,13 @@
 import argparse
 import os
-import datetime
-import glob
-import random
 import torch
-import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-import clip
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
 import gymnasium as gym
-from collections.abc import Sequence
-import open3d as o3d
 # o3d.visualization.Visualizer().destroy_window() #rendering X 
 import matplotlib.pyplot as plt
-from PIL import Image
 
 # Isaac Lab 관련 라이브러리 임포트
 from isaaclab.app import AppLauncher
@@ -44,15 +36,11 @@ from isaaclab.utils.math import subtract_frame_transforms
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from isaacsim.util.debug_draw import _debug_draw
-from pxr import Gf
-
-draw = _debug_draw.acquire_debug_draw_interface()
 
 # 카메라 렌더링 옵션 --enable_cameras flag 를 대신하기 위함
-import carb
-carb_settings_iface = carb.settings.get_settings()
-carb_settings_iface.set_bool("/isaaclab/cameras_enabled", True)
+# import carb
+# carb_settings_iface = carb.settings.get_settings()
+# carb_settings_iface.set_bool("/isaaclab/cameras_enabled", True)
 
 
 # 커스텀 환경 시뮬레이션 환경 config 파일 임포트

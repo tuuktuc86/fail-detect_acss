@@ -71,10 +71,17 @@ from isaaclab.utils.math import subtract_frame_transforms
 
 
 # 커스텀 환경 시뮬레이션 환경 config 파일 임포트
-from day3.task.lift.custom_pickplace_env_cfg_3_3 import YCBPickPlaceEnvCfg
+from task.pickandrelease.pickandrelease_env_cfg import ObjectTableSceneCfg
 
 # gymnasium 라이브러리를 활용한 시뮬레이션 환경 선언
-from day3.task.lift.config.ik_abs_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg
+from task.pickandrelease.config.franka.ik_abs_env_cfg import FrankaYCBPickPlaceEnvCfg
+# 환경 및 설정 파싱
+env_cfg: YCBPickPlaceEnvCfg = parse_env_cfg(
+    "Isaac-Lift-Cube-Franka-Custom-v0",
+    device=args_cli.device,
+    num_envs=num_envs,
+    use_fabric=not args_cli.disable_fabric,
+)
 gym.register(
     id="Isaac-Lift-Cube-Franka-Custom-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
