@@ -47,25 +47,25 @@ def object_ee_distance(
     return 1 - torch.tanh(object_ee_distance / std)
 
 
-# def object_goal_distance(
-#     env: ManagerBasedRLEnv,
-#     std: float,
-#     minimal_height: float,
-#     command_name: str,
-#     object_cfg: SceneEntityCfg = SceneEntityCfg("object_0"),
-#     # object_cfg: SceneEntityCfg,
-#     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-# ) -> torch.Tensor:
-#     """Reward the agent for tracking the goal pose using tanh-kernel."""
-#     # extract the used quantities (to enable type-hinting)
-#     robot: RigidObject = env.scene[robot_cfg.name]
-#     object: RigidObject = env.scene[object_cfg.name]
-#     print(command_name)
-#     command = env.command_manager.get_command(command_name)
-#     # compute the desired position in the world frame
-#     des_pos_b = command[:, :3]
-#     des_pos_w, _ = combine_frame_transforms(robot.data.root_state_w[:, :3], robot.data.root_state_w[:, 3:7], des_pos_b)
-#     # distance of the end-effector to the object: (num_envs,)
-#     distance = torch.norm(des_pos_w - object.data.root_pos_w[:, :3], dim=1)
-#     # rewarded if the object is lifted above the threshold
-#     return (object.data.root_pos_w[:, 2] > minimal_height) * (1 - torch.tanh(distance / std))
+def object_goal_distance(
+    env: ManagerBasedRLEnv,
+    std: float,
+    minimal_height: float,
+    command_name: str,
+    object_cfg: SceneEntityCfg = SceneEntityCfg("object_0"),
+    # object_cfg: SceneEntityCfg,
+    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward the agent for tracking the goal pose using tanh-kernel."""
+    # extract the used quantities (to enable type-hinting)
+    robot: RigidObject = env.scene[robot_cfg.name]
+    object: RigidObject = env.scene[object_cfg.name]
+    
+    command = env.command_manager.get_command(command_name)
+    # compute the desired position in the world frame
+    des_pos_b = command[:, :3]
+    des_pos_w, _ = combine_frame_transforms(robot.data.root_state_w[:, :3], robot.data.root_state_w[:, 3:7], des_pos_b)
+    # distance of the end-effector to the object: (num_envs,)
+    distance = torch.norm(des_pos_w - object.data.root_pos_w[:, :3], dim=1)
+    # rewarded if the object is lifted above the threshold
+    return (object.data.root_pos_w[:, 2] > minimal_height) * (1 - torch.tanh(distance / std))

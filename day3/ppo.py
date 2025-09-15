@@ -1,4 +1,7 @@
 # define shared model (stochastic and deterministic models) using mixins
+import torch
+import torch.nn as nn
+
 # import the skrl components to build the RL system
 from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
 from skrl.envs.loaders.torch import load_isaaclab_env
@@ -42,3 +45,35 @@ class Shared(GaussianMixin, DeterministicMixin, Model):
             shared_output = self.net(inputs["states"]) if self._shared_output is None else self._shared_output
             self._shared_output = None
             return self.value_layer(shared_output), {}
+
+
+def set_config(env, device):
+    cfg = PPO_DEFAULT_CONFIG.copy()
+    cfg["rollouts"] = 96  # memory_size
+    cfg["learning_epochs"] = 5
+    cfg["mini_batches"] = 4  # 96 * 4096 / 98304
+    cfg["discount_factor"] = 0.99
+    cfg["lambda"] = 0.95
+    cfg["learning_rate"] = 1e-3
+    cfg["learning_rate_scheduler"] = KLAdaptiveLR
+    cfg["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.01, "min_lr": 1e-5}
+    cfg["random_timesteps"] = 0
+    cfg["learning_starts"] = 0
+    cfg["grad_norm_clip"] = 1.0
+    cfg["ratio_clip"] = 0.2
+    cfg["value_clip"] = 0.2
+    cfg["clip_predicted_values"] = True
+    cfg["entropy_loss_scale"] = 0.01
+    cfg["value_loss_scale"] = 1.0
+    cfg["kl_threshold"] = 0
+    cfg["rewards_shaper"] = None
+    cfg["time_limit_bootstrap"] = True
+    cfg["state_preprocessor"] = RunningStandardScaler
+    cfg["state_preprocessor_kwargs"] = {"size": env.observation_space, "device": device}
+    cfg["value_preprocessor"] = RunningStandardScaler
+    cfg["value_preprocessor_kwargs"] = {"size": 1, "device": device}
+    # logging to TensorBoard and write checkpoints (in timesteps)
+    cfg["experiment"]["write_interval"] = 336
+    cfg["experiment"]["checkpoint_interval"] = 3360
+    cfg["experiment"]["directory"] = "runs/torch/Isaac-Lift-Franka-v0"
+    return cfg

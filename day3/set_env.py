@@ -68,5 +68,4 @@ def make_env(id = "Isaac-Lift-Cube-Franka-Custom-v0"):
     # 환경 생성 및 초기화
     env = gym.make(id, cfg=env_cfg)
     env = wrap_env(env)
-    env.reset()
     return env
