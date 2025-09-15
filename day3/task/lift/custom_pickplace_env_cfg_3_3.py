@@ -96,13 +96,13 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
         """환경 생성 후 자동으로 실행되는 추가 세팅 코드"""
 
         # YCB object들 전체 읽어오기
-        ycb_obj_usd_paths = glob.glob('data/assets/ycb_usd/ycb/024_bowl/final.usd')
-
+        ycb_obj_usd_paths = glob.glob('data/assets/ycb_usd/ycb/077_rubiks_cube/final.usd')
+        print(ycb_obj_usd_paths)
         # YCB object 중 3가지 물체 random하게 설정
         selected_ycb_obj_usd_paths = random.sample(ycb_obj_usd_paths, 1)
 
         # YCB object 놓을 위치 지정(카메라 view에 맞게)
-        objects_position = [[0.4, 0.0, 0.6],
+        objects_position = [[0.4, 0.0, 0.51],
                             [0.48, -0.15, 0.6],
                             [0.4, -0.3, 0.6]]
 
@@ -111,9 +111,10 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
 
             # 지정된 위치에서 일정 거리 내에 random하게 위치 재설정 (0.05 이내)
             # 물체가 안겹치게 생성되도록 z위치를 조금씩 다르게 설정하는 것이 좋음
-            random_position = [objects_position[i][0] + random.random() * 0.05, 
-                               objects_position[i][1] + random.random() * 0.03, 
-                               objects_position[i][2] + 0.05 * i]
+            #  근데 난 바꿈
+            random_position = [objects_position[i][0] + random.random() * 0.00, 
+                               objects_position[i][1] + random.random() * 0.00, 
+                               objects_position[i][2] + 0.02 * i]
             
             # YCB object 경로를 절대 경로로 설정
             ycb_obj_usd_path = os.path.join(os.getcwd(), selected_ycb_obj_usd_paths[i])
@@ -195,6 +196,13 @@ class EventCfg:
 @configclass
 class RewardsCfg:
     """보상(reward) 항목 설정 - 강화학습 개발시 필요"""
+    reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=10.0)
+    lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.3}, weight=20.0)
+    object_goal_tracking = RewTerm(
+        func=mdp.object_goal_distance,
+        params={"std": 0.3, "minimal_height": 0.3, "command_name": "object_pose"},
+        weight=30.0,
+    )
 
 
 @configclass
@@ -202,7 +210,7 @@ class TerminationsCfg:
     """에피소드 종료 조건(termination) 설정"""
     # 모든 물체가 원하는 지점에 들어왔을때, 에피소드 종료
     object_reach_goal = DoneTerm(func=mdp.object_pickplace_goal)
-
+    
 
 @configclass
 class CurriculumCfg:

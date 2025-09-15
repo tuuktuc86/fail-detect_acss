@@ -936,7 +936,7 @@ def main():
 
 
                 obs, rewards, terminated, truncated, info = env.step(actions)
-                print(actions)
+                print(rewards)
                 # print("===================")
                 # print(ee_pose[0])
                 # print(obs['policy'][0])
