@@ -20,6 +20,10 @@ from PIL import Image
 # Isaac Lab 관련 라이브러리 임포트
 from isaaclab.app import AppLauncher
 
+import torch
+import torch.nn as nn
+
+
 # Argparse로 CLI 인자 파싱 및 Omniverse 앱 실행
 parser = argparse.ArgumentParser(description="Tutorial on creating an empty stage.")
 parser.add_argument(
@@ -64,23 +68,7 @@ gym.register(
     },
     disable_env_checker=True,
 )
-# ---------- helpers ----------
-def parse_deltas(s: str):
-    s = s.strip()
-    if not s:
-        return None                     # 0개: 그대로
-    vals = [float(x) for x in s.split()] # 공백으로 분리
-    return vals[:8]                      # 최대 8개만
 
-def next_actions(prev: torch.Tensor, delta=None, total_dim=8, device="cuda:0", clip=True):
-    if prev.dim()==1: prev = prev.unsqueeze(0)
-    out = prev.clone().to(device)
-    if delta is not None:
-        inc = torch.as_tensor(delta, dtype=out.dtype, device=device).flatten()
-        k = min(inc.numel(), total_dim)
-        out[:, :k] += inc[:k]
-    if clip: out = out.clamp(-1.0, 1.0)
-    return out
 
 
 #refer_data = np.load("dataset_all_afterpregrasp_t3.npz")
@@ -149,14 +137,7 @@ def main():
             tcp_rest_position = ee_frame_sensor.data.target_pos_w[..., 0, :].clone() - env.unwrapped.scene.env_origins
             tcp_rest_orientation = ee_frame_sensor.data.target_quat_w[..., 0, :].clone()
             ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
-            #env.unwrapped.unwrapped.scene.state['rigid_object']['object_0'] 
-            #{'root_pose': tensor([[0.4000, 0.0000, 0.6000, 1.0000, 0.0000, 0.0000, 0.0000]],
-       #device='cuda:0'), 'root_velocity': tensor([[0., 0., 0., 0., 0., 0.]], device='cuda:0')}
-            # s = input("delta 입력(공백 구분, 0~8개, 빈 입력=유지, q=종료): ").strip()
-            # if s.lower() == "q":
-            #     break
-            # delta = parse_deltas(s)  # None | list[float]
-            # actions = next_actions(prev, delta, total_dim=8, device=device, clip=True)  
+
             
             if step_count > 20 :
                 actions = torch.tensor(
@@ -166,27 +147,6 @@ def main():
                 actions[0][:3] = env.unwrapped.scene._rigid_objects['object_0']._data.root_pos_w
                 actions[0][2]-=0.3
 
-            # if step_count > 50 :
-            #     actions = torch.tensor(
-            #         [[0.4000, 0.0000, 0.030, -0.0573, 0.9845, 0.1090, 0.1252, 1.0000]],
-            #         device="cuda:0"
-            #     )
-            #     actions[0][:3] = env.unwrapped.scene._rigid_objects['object_0']._data.root_pos_w
-            #     actions[0][2]-=0.5
-                
-            # if step_count > 80 :
-            #     actions = torch.tensor(
-            #         [[0.4000, 0.0000, 0.030, -0.0573, 0.9845, 0.1090, 0.1252, -1.0000]],
-            #         device="cuda:0"
-            #     )
-            #     actions[0][:3] = env.unwrapped.scene._rigid_objects['object_0']._data.root_pos_w
-            #     actions[0][2]-=0.5
-                
-            # if step_count > 150 :
-            #     actions = torch.tensor(
-            #     [[0.4000, 0.0000, 0.330, -0.0573, 0.9845, 0.1090, 0.1252, -1.0000]],
-            #     device="cuda:0"
-            # )
 
             obs, rewards, terminated, truncated, info = env.step(actions)
             

@@ -198,11 +198,11 @@ class RewardsCfg:
     """보상(reward) 항목 설정 - 강화학습 개발시 필요"""
     reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=10.0)
     lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.3}, weight=20.0)
-    object_goal_tracking = RewTerm(
-        func=mdp.object_goal_distance,
-        params={"std": 0.3, "minimal_height": 0.3, "command_name": "object_pose"},
-        weight=30.0,
-    )
+    # object_goal_tracking = RewTerm(
+    #     func=mdp.object_goal_distance,
+    #     params={"std": 0.3, "minimal_height": 0.3, "command_name": "object_pose"},
+    #     weight=30.0,
+    # )
 
 
 @configclass
