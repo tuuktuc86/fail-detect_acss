@@ -32,6 +32,7 @@ parser.add_argument(
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+args_cli.headless = True
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -53,7 +54,7 @@ gym.register(
     disable_env_checker=True,
 )
 
-num_envs = 2
+num_envs = 500
 
 # 환경 및 설정 파싱
 env_cfg: YCBPickPlaceEnvCfg = parse_env_cfg(
