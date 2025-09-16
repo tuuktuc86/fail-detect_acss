@@ -938,6 +938,8 @@ def main():
 
 
                 obs, rewards, terminated, truncated, info = env.step(actions)
+                if pick_and_place_sm.sm_state >=9:
+                    print(" ")
                 print(f"reward = {rewards}")
                 print("===================")
                 # print(ee_pose[0])

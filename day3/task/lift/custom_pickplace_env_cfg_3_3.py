@@ -169,7 +169,7 @@ class CommandsCfg:
         resampling_time_range=(5.0, 5.0),
         debug_vis=False,
         ranges=mdp.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.20000, 0.20000), pos_y=(0.6000, 0.6000), pos_z=(0.5688, 0.5688), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0) 
+            pos_x=(0.20000, 0.20000), pos_y=(0.6000, 0.6000), pos_z=(0.5699, 0.5699), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0) 
         ),
     )
 
@@ -211,7 +211,7 @@ class EventCfg:
 @configclass
 class RewardsCfg:
     """보상(reward) 항목 설정 - 강화학습 개발시 필요"""
-    reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=1.0)
+    reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=2.0)
     #lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.6}, weight=2.0)
     object_goal_tracking = RewTerm(
         func=mdp.object_goal_distance,
@@ -221,11 +221,11 @@ class RewardsCfg:
     fixed_bin = RewTerm(
         func=mdp.fixed_bin,
         params={"std": 0.3, "command_name": "bin_pose"},
-        weight=-3.0,
+        weight=-1.0,
     )
     release = RewTerm(
         func=mdp.release,
-        params={"std": 0.3, "minimal_height": 0.7, "command_name": "bin_pose"},
+        params={"std": 0.3, "minimal_height": 0.6, "command_name": "bin_pose"},
         weight=5.0,
     )
     # object_bin_tracking = RewTerm(
