@@ -152,7 +152,6 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
 
 
 """ MDP 세팅 (명령어, 액션, 관측, 보상, 이벤트 등) """
-
 @configclass
 class CommandsCfg:
     """MDP에 사용되는 명령어(command) 정의"""
@@ -162,7 +161,16 @@ class CommandsCfg:
         resampling_time_range=(5.0, 5.0),
         debug_vis=False,
         ranges=mdp.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.5, 0.5), pos_y=(-0.0, 0.0), pos_z=(0.525, 0.53), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0)
+            pos_x=(0.2, 0.2), pos_y=(0.6, 0.6), pos_z=(0.80, 0.9), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0) 
+        ),
+    )
+    bin_pose = mdp.UniformPoseCommandCfg(
+        asset_name="bin",
+        body_name="bin",
+        resampling_time_range=(5.0, 5.0),
+        debug_vis=False,
+        ranges=mdp.UniformPoseCommandCfg.Ranges(
+            pos_x=(0.20000, 0.20000), pos_y=(0.6000, 0.6000), pos_z=(0.5699, 0.5699), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0) 
         ),
     )
 
@@ -204,20 +212,35 @@ class EventCfg:
 @configclass
 class RewardsCfg:
     """보상(reward) 항목 설정 - 강화학습 개발시 필요"""
-    reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=1.0)
-    lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.5}, weight=2.0)
+    reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=2.0)
+    #lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.6}, weight=2.0)
     object_goal_tracking = RewTerm(
         func=mdp.object_goal_distance,
-        params={"std": 0.3, "minimal_height": 0.3, "command_name": "object_pose"},
+        params={"std": 0.3, "minimal_height": 0.6, "command_name": "object_pose"},
         weight=3.0,
     )
-    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
-
-    joint_vel = RewTerm(
-        func=mdp.joint_vel_l2,
-        weight=-1e-4,
-        params={"asset_cfg": SceneEntityCfg("robot")},
+    fixed_bin = RewTerm(
+        func=mdp.fixed_bin,
+        params={"std": 0.3, "command_name": "bin_pose"},
+        weight=-1.0,
     )
+    release = RewTerm(
+        func=mdp.release,
+        params={"std": 0.3, "minimal_height": 0.6, "command_name": "bin_pose"},
+        weight=5.0,
+    )
+    # object_bin_tracking = RewTerm(
+    #     func=mdp.object_goal_distance,
+    #     params={"std": 0.3, "minimal_height": 0.7, "command_name": "object_pose"},
+    #     weight=3.0,
+    # )
+    # action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
+    # print("action_rate = {action_rate}")
+    # joint_vel = RewTerm(
+    #     func=mdp.joint_vel_l2,
+    #     weight=-1e-4,
+    #     params={"asset_cfg": SceneEntityCfg("robot")},
+    # )
     
 
 @configclass
@@ -225,18 +248,18 @@ class TerminationsCfg:
     """에피소드 종료 조건(termination) 설정"""
     # 모든 물체가 원하는 지점에 들어왔을때, 에피소드 종료
     object_reach_goal = DoneTerm(func=mdp.object_pickplace_goal)
-    time_out = DoneTerm(func=mdp.time_out, time_out=True)
+    #time_out = DoneTerm(func=mdp.time_out, time_out=True)
     
 
 @configclass
 class CurriculumCfg:
     """커리큘럼(curriculum) 보상 가중치 변경 등"""
-    action_rate = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 10000}
-    )
-    joint_vel = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 10000}
-    )
+    # action_rate = CurrTerm(
+    #     func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 10000}
+    # )
+    # joint_vel = CurrTerm(
+    #     func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 10000}
+    # )
 
 """ 최종 환경 config """
 @configclass

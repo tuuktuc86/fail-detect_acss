@@ -12,6 +12,9 @@ def main():
 
     env = set_env.make_env()
     obs, _ = env.reset()
+    print(obs)
+    print(env.action_space)
+    print(env.observation_space)
     device = env.device
     print(f"Environment reset. Number of environments: {env.unwrapped.num_envs}")
     memory = RandomMemory(memory_size=96, num_envs=env.num_envs, device=device)
@@ -32,7 +35,7 @@ def main():
 
 
     # configure and instantiate the RL trainer
-    cfg_trainer = {"timesteps": 67200, "headless": True}
+    cfg_trainer = {"timesteps": 100000, "headless": True}
     trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
 
     # start training
