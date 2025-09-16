@@ -388,7 +388,7 @@ class PickAndPlaceSm:
             elif state == PickAndPlaceSmState.LIFT:
                 # 목표 end-effector 자세 및 그리퍼 상태 정의
                 self.des_ee_pose[i] = self.lift_pose 
-                self.des_ee_pose[i] = torch.tensor([[0.2000, 0.6000, 0.000, -1.4891e-10,  1.0000e+00, 8.4725e-11, -8.7813e-10]], device=self.device)
+                #self.des_ee_pose[i] = torch.tensor([[0.2000, 0.6000, 0.000, -1.4891e-10,  1.0000e+00, 8.4725e-11, -8.7813e-10]], device=self.device)
                 self.des_gripper_state[i] = GripperState.CLOSE
                 # 목표자세 도딜시 특정 시간 동안 대기
                 if torch.linalg.norm(ee_pos[i] - self.des_ee_pose[i, :3]) < self.position_threshold:

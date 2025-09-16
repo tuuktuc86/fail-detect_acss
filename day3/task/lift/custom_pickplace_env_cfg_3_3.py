@@ -223,6 +223,11 @@ class RewardsCfg:
         params={"std": 0.3, "command_name": "bin_pose"},
         weight=-3.0,
     )
+    release = RewTerm(
+        func=mdp.release,
+        params={"std": 0.3, "minimal_height": 0.7, "command_name": "bin_pose"},
+        weight=5.0,
+    )
     # object_bin_tracking = RewTerm(
     #     func=mdp.object_goal_distance,
     #     params={"std": 0.3, "minimal_height": 0.7, "command_name": "object_pose"},
