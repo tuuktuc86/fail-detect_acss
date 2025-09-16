@@ -268,8 +268,8 @@ class PickAndPlaceSm:
         self.des_gripper_state = torch.full((self.num_envs, 1), 0.0, device=self.device)
 
         # 물체 이미지를 취득하기 위한 준비 자세
-        # self.ready_pose = torch.tensor([[ 3.0280e-01, -5.6916e-02,  6.2400e-01, -1.4891e-10,  1.0000e+00, 8.4725e-11, -8.7813e-10]], device=self.device)  # (x, y, z, qw, qx, qy, qz)
-        self.ready_pose = torch.tensor([[0.2000, 0.6000, 0.5699, -1.4891e-10,  1.0000e+00, 8.4725e-11, -8.7813e-10]], device=self.device)  # (x, y, z, qw, qx, qy, qz)
+        self.ready_pose = torch.tensor([[ 3.0280e-01, -5.6916e-02,  6.2400e-01, -1.4891e-10,  1.0000e+00, 8.4725e-11, -8.7813e-10]], device=self.device)  # (x, y, z, qw, qx, qy, qz)
+        #self.ready_pose = torch.tensor([[0.2000, 0.6000, 0.5699, -1.4891e-10,  1.0000e+00, 8.4725e-11, -8.7813e-10]], device=self.device)  # (x, y, z, qw, qx, qy, qz)
         self.ready_pose = self.ready_pose.repeat(num_envs, 1)
 
         # 물체를 상자에 두기 위해 상자 위에 위치하는 자세
@@ -388,6 +388,7 @@ class PickAndPlaceSm:
             elif state == PickAndPlaceSmState.LIFT:
                 # 목표 end-effector 자세 및 그리퍼 상태 정의
                 self.des_ee_pose[i] = self.lift_pose 
+                self.des_ee_pose[i] = torch.tensor([[0.2000, 0.6000, 0.000, -1.4891e-10,  1.0000e+00, 8.4725e-11, -8.7813e-10]], device=self.device)
                 self.des_gripper_state[i] = GripperState.CLOSE
                 # 목표자세 도딜시 특정 시간 동안 대기
                 if torch.linalg.norm(ee_pos[i] - self.des_ee_pose[i, :3]) < self.position_threshold:
