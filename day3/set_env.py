@@ -61,6 +61,7 @@ env_cfg: YCBPickPlaceEnvCfg = parse_env_cfg(
     device=args_cli.device,
     num_envs=num_envs,
     use_fabric=not args_cli.disable_fabric,
+   
 )
 
 def make_env(id = "Isaac-Lift-Cube-Franka-Custom-v0"):

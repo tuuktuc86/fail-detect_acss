@@ -257,7 +257,7 @@ class YCBPickPlaceEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self):
         """환경 생성 후 추가 세팅"""
         self.decimation = 2
-        self.episode_length_s = 5.0
+        self.episode_length_s = 6.0
         # 시뮬레이션 기본 설정
         self.sim.dt = 0.01  # 100Hz
         self.sim.render_interval = self.decimation
