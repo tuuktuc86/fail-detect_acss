@@ -23,6 +23,8 @@ def object_is_lifted(
 ) -> torch.Tensor:
     """Reward the agent for lifting the object above the minimal height."""
     object: RigidObject = env.scene[object_cfg.name]
+    #print("object_height = ", object.data.root_pos_w[:, 2])
+    print(f"lift = {torch.where(object.data.root_pos_w[:, 2] > minimal_height, 1.0, 0.0)}")
     return torch.where(object.data.root_pos_w[:, 2] > minimal_height, 1.0, 0.0)
 
 
@@ -43,7 +45,7 @@ def object_ee_distance(
     ee_w = ee_frame.data.target_pos_w[..., 0, :]
     # Distance of the end-effector to the object: (num_envs,)
     object_ee_distance = torch.norm(cube_pos_w - ee_w, dim=1)
-
+    print(f"reaching = {1 - torch.tanh(object_ee_distance / std)}")
     return 1 - torch.tanh(object_ee_distance / std)
 
 
@@ -63,8 +65,51 @@ def object_goal_distance(
     command = env.command_manager.get_command(command_name)
     # compute the desired position in the world frame
     des_pos_b = command[:, :3]
+
     des_pos_w, _ = combine_frame_transforms(robot.data.root_state_w[:, :3], robot.data.root_state_w[:, 3:7], des_pos_b)
     # distance of the end-effector to the object: (num_envs,)
     distance = torch.norm(des_pos_w - object.data.root_pos_w[:, :3], dim=1)
     # rewarded if the object is lifted above the threshold
+    print(f"goal_dist = {(object.data.root_pos_w[:, 2] > minimal_height) * (1 - torch.tanh(distance / std))}")
     return (object.data.root_pos_w[:, 2] > minimal_height) * (1 - torch.tanh(distance / std))
+
+def fixed_bin(
+    env: ManagerBasedRLEnv,
+    std: float,
+    command_name: str,
+    bin_cfg: SceneEntityCfg = SceneEntityCfg("bin_0"),
+    # object_cfg: SceneEntityCfg,
+    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward the agent for tracking the goal pose using tanh-kernel."""
+    # extract the used quantities (to enable type-hinting)
+    robot: RigidObject = env.scene[robot_cfg.name]
+    bin: RigidObject = env.scene[bin_cfg.name]
+    command = env.command_manager.get_command(command_name)
+    # compute the desired position in the world frame
+    des_pos_b = command[:, :3]
+
+    des_pos_w, _ = combine_frame_transforms(robot.data.root_state_w[:, :3], robot.data.root_state_w[:, 3:7], des_pos_b)
+    # distance of the end-effector to the object: (num_envs,)
+    distance = torch.norm(des_pos_w - object.data.root_pos_w[:, :3], dim=1)
+    # rewarded if the object is lifted above the threshold
+    print(f"bin_fixed = {torch.tanh(distance / std)}")
+    return torch.tanh(distance / std)
+
+# def object_bin_distance(
+#     env: ManagerBasedRLEnv,
+#     std: float,
+#     command_name: str,
+#     object_cfg: SceneEntityCfg = SceneEntityCfg("object_0"),
+#     # object_cfg: SceneEntityCfg,
+#     bin_cfg: SceneEntityCfg = SceneEntityCfg("bin"),
+# ) -> torch.Tensor:
+#     """Reward the agent for tracking the goal pose using tanh-kernel."""
+#     # extract the used quantities (to enable type-hinting)
+#     bin: RigidObject = env.scene[bin.name]
+#     object: RigidObject = env.scene[object_cfg.name]
+#     command = env.command_manager.get_command(command_name)
+#     # compute the desired position in the world frame
+#     des_pos_b = command[:, :3]
+#     print(1)
+#     return 1

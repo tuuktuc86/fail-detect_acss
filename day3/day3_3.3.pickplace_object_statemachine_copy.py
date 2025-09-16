@@ -212,7 +212,7 @@ class PickAndPlaceSmState:
 
 class PickAndPlaceSmWaitTime:
     """ 각 pick-and-place 상황 state 별 대기 시간(초) 정의 """
-    REST = 3.0
+    REST = 1.0
     PREDICT = 0.0
     READY = 0.5
     PREGRASP = 1.0
@@ -268,7 +268,8 @@ class PickAndPlaceSm:
         self.des_gripper_state = torch.full((self.num_envs, 1), 0.0, device=self.device)
 
         # 물체 이미지를 취득하기 위한 준비 자세
-        self.ready_pose = torch.tensor([[ 3.0280e-01, -5.6916e-02,  6.2400e-01, -1.4891e-10,  1.0000e+00, 8.4725e-11, -8.7813e-10]], device=self.device)  # (x, y, z, qw, qx, qy, qz)
+        # self.ready_pose = torch.tensor([[ 3.0280e-01, -5.6916e-02,  6.2400e-01, -1.4891e-10,  1.0000e+00, 8.4725e-11, -8.7813e-10]], device=self.device)  # (x, y, z, qw, qx, qy, qz)
+        self.ready_pose = torch.tensor([[0.2000, 0.6000, 0.5699, -1.4891e-10,  1.0000e+00, 8.4725e-11, -8.7813e-10]], device=self.device)  # (x, y, z, qw, qx, qy, qz)
         self.ready_pose = self.ready_pose.repeat(num_envs, 1)
 
         # 물체를 상자에 두기 위해 상자 위에 위치하는 자세
@@ -527,7 +528,7 @@ def main():
         prim_path="/World/camera",
         position=np.array([3.67, 0.218, 1.0]),
         frequency=50,
-        pdate_period=env_cfg.sim.dt,
+        #pdate_period=env_cfg.sim.dt,
         resolution=(640, 480),
         orientation = rot_utils.euler_angles_to_quats(np.array([0, 88, 90]), degrees=True),)
     camera.set_world_pose(np.array([3.7245, 0.218, 1.053]), rot_utils.euler_angles_to_quats(np.array([88, 0, 90]), degrees=True), camera_axes="usd")
@@ -538,7 +539,7 @@ def main():
         prim_path="/World/camera2",
         position=np.array([0.16304, 0.4922, 5]),
         frequency=50,
-        pdate_period=env_cfg.sim.dt,
+        #pdate_period=env_cfg.sim.dt,
         resolution=(640, 480),
         orientation = rot_utils.euler_angles_to_quats(np.array([0, 0, -90]), degrees=True),)
     camera2.set_world_pose(np.array([0.16304, 0.4922, 5]), rot_utils.euler_angles_to_quats(np.array([0, 0, -90]), degrees=True), camera_axes="usd")
@@ -936,8 +937,8 @@ def main():
 
 
                 obs, rewards, terminated, truncated, info = env.step(actions)
-                print(actions)
-                # print("===================")
+                print(f"reward = {rewards}")
+                print("===================")
                 # print(ee_pose[0])
                 # print(obs['policy'][0])
                 # print(robot_data.applied_torque)
