@@ -119,5 +119,5 @@ def release(
     # distance of the end-effector to the object: (num_envs,)
     distance = torch.norm(des_pos_w - object.data.root_pos_w[:, :3], dim=1)
     # rewarded if the object is lifted above the threshold
-    print(f"release_dist = {(ee_w[2] > minimal_height) * (1 - torch.tanh(distance / std))}")
-    return (ee_w[2] > minimal_height) * (1 - torch.tanh(distance / std))
+    print(f"release_dist = {(ee_w[0][0][0] > -0.1 and ee_w[0][0][0] < 0.5)*(ee_w[0][0][1] > 0.25 and ee_w[0][0][1] < 0.8) *(ee_w[0][0][2] > minimal_height) * (1 - torch.tanh(distance / std))}")
+    return (ee_w[0][0][0] > -0.1 and ee_w[0][0][0] < 0.5)*(ee_w[0][0][1] > 0.25 and ee_w[0][0][1] < 0.8) *(ee_w[0][0][2] > minimal_height) * (1 - torch.tanh(distance / std))
