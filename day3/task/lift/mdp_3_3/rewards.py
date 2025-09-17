@@ -71,7 +71,8 @@ def object_goal_distance(
     distance = torch.norm(des_pos_w - object.data.root_pos_w[:, :3], dim=1)
     # rewarded if the object is lifted above the threshold
     # print(f"goal_dist = {(object.data.root_pos_w[:, 2] > minimal_height) * (1 - torch.tanh(distance / std))}")
-    return (object.data.root_pos_w[:, 2] > minimal_height) * (1 - torch.tanh(distance / std))
+    #return (object.data.root_pos_w[:, 2] > minimal_height) * (1 - torch.tanh(distance / std))
+    return 1 - torch.tanh(distance / std)
 
 def fixed_bin(
     env: ManagerBasedRLEnv,

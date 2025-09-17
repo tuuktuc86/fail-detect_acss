@@ -73,7 +73,7 @@ def set_config(env, device):
     cfg["value_preprocessor"] = RunningStandardScaler
     cfg["value_preprocessor_kwargs"] = {"size": 1, "device": device}
     # logging to TensorBoard and write checkpoints (in timesteps)
-    cfg["experiment"]["write_interval"] = 336
-    cfg["experiment"]["checkpoint_interval"] = 3360
-    cfg["experiment"]["directory"] = "runs/torch/Isaac-Lift-Franka-v0"
+    cfg["experiment"]["write_interval"] = 100
+    cfg["experiment"]["checkpoint_interval"] = 10000
+    cfg["experiment"]["directory"] = "runs/torch/Isaac-Lift-Franka-v1"
     return cfg

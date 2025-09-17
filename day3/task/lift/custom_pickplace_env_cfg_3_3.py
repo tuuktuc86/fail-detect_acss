@@ -217,17 +217,17 @@ class RewardsCfg:
     object_goal_tracking = RewTerm(
         func=mdp.object_goal_distance,
         params={"std": 0.3, "minimal_height": 0.6, "command_name": "object_pose"},
-        weight=3.0,
+        weight=5.0,
     )
     fixed_bin = RewTerm(
         func=mdp.fixed_bin,
         params={"std": 0.3, "command_name": "bin_pose"},
-        weight=-1.0,
+        weight=-10.0,
     )
     release = RewTerm(
         func=mdp.release,
         params={"std": 0.3, "minimal_height": 0.6, "command_name": "bin_pose"},
-        weight=5.0,
+        weight=50.0,
     )
     # object_bin_tracking = RewTerm(
     #     func=mdp.object_goal_distance,
@@ -254,12 +254,12 @@ class TerminationsCfg:
 @configclass
 class CurriculumCfg:
     """커리큘럼(curriculum) 보상 가중치 변경 등"""
-    action_rate = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 1000000}
-    )
-    joint_vel = CurrTerm(
-        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 1000000}
-    )
+    # action_rate = CurrTerm(
+    #     func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 1000000}
+    # )
+    # joint_vel = CurrTerm(
+    #     func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 1000000}
+    # )
 
 """ 최종 환경 config """
 @configclass

@@ -32,7 +32,7 @@ def main():
 
 
     # configure and instantiate the RL trainer
-    cfg_trainer = {"timesteps": 10000000, "headless": True}
+    cfg_trainer = {"timesteps": 1000000, "headless": True}
     trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
 
     # start training
