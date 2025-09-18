@@ -1,6 +1,7 @@
 # define shared model (stochastic and deterministic models) using mixins
 import torch
 import torch.nn as nn
+import torch.distributions as D
 
 # import the skrl components to build the RL system
 from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
@@ -45,7 +46,6 @@ class Shared(GaussianMixin, DeterministicMixin, Model):
             shared_output = self.net(inputs["states"]) if self._shared_output is None else self._shared_output
             self._shared_output = None
             return self.value_layer(shared_output), {}
-
 
 def set_config(env, device):
     cfg = PPO_DEFAULT_CONFIG.copy()

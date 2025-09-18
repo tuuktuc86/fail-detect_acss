@@ -78,22 +78,19 @@ def make_env(id = "Isaac-Lift-Cube-Franka-Custom-v0"):
     return env
 
 def main():
-    print("1")
     env = make_env()
     env.reset()
-    print("2")
     device = env.device
     models = {}
     models["policy"] = ppo.Shared(env.observation_space, env.action_space, device)
     models["value"] = models["policy"]  # same instance: shared model
-    print("3")
     agent = PPO(models=models,
                 memory=None,
                 cfg=ppo.set_config(env = env, device=device),
                 observation_space=env.observation_space,
                 action_space=env.action_space,
                 device=device)
-    agent.load("./runs/torch/Isaac-Lift-Franka-v0/25-09-16_13-16-31-370387_PPO/checkpoints/agent_991200.pt")
+    agent.load("/fail-detect_acss/runs/torch/isaac-Lift-Franka-v0/25-09-16_13-16-31-370387_PPO/checkpoints/best_agent.pt")
 
     for m in agent.models.values():
         m.eval()
@@ -106,8 +103,9 @@ def main():
         while True:
             # 행동 계산(정책의 평균 행동을 사용하도록 eval 모드 + no_grad)
             actions, _, _ = agent.act(obs, timestep=0, timesteps=0)
+            #actions[0, -1] = torch.where(actions[0, -1] < 0, torch.tensor(-1.), torch.tensor(1.))
             print(actions)
-            actions[0]
+        
             obs, rew, terminated, truncated, info = env.step(actions)
             ep_ret += rew.mean().item() if torch.is_tensor(rew) else float(rew)
             steps += 1

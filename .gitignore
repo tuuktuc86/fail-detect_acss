@@ -10,7 +10,7 @@ output_data/*
 Pointnet_Pointnet2_pytorch/
 failure_case/*
 success_traj/*
-
+runs/*
 # Model files
 *.ckpt
 *.pth

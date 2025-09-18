@@ -216,8 +216,8 @@ class RewardsCfg:
     #lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.6}, weight=2.0)
     object_goal_tracking = RewTerm(
         func=mdp.object_goal_distance,
-        params={"std": 0.3, "minimal_height": 0.6, "command_name": "object_pose"},
-        weight=5.0,
+        params={"std": 0.3, "minimal_height": 0.5, "command_name": "object_pose"},
+        weight=3.0,
     )
     fixed_bin = RewTerm(
         func=mdp.fixed_bin,
@@ -227,13 +227,13 @@ class RewardsCfg:
     release = RewTerm(
         func=mdp.release,
         params={"std": 0.3, "minimal_height": 0.6, "command_name": "bin_pose"},
+        weight=5.0,
+    )
+
+    goal = RewTerm(
+        func=mdp.object_in_bin_without_ee_near_bin_sparse,
         weight=50.0,
     )
-    # object_bin_tracking = RewTerm(
-    #     func=mdp.object_goal_distance,
-    #     params={"std": 0.3, "minimal_height": 0.7, "command_name": "object_pose"},
-    #     weight=3.0,
-    # )
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
     # print("action_rate = {action_rate}")
     joint_vel = RewTerm(
@@ -280,7 +280,7 @@ class YCBPickPlaceEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self):
         """환경 생성 후 추가 세팅"""
         self.decimation = 2
-        self.episode_length_s = 6.0
+        self.episode_length_s = 8.0
         # 시뮬레이션 기본 설정
         self.sim.dt = 0.01  # 100Hz
         self.sim.render_interval = self.decimation
