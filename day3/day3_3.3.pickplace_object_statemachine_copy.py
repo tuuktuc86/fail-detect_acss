@@ -62,6 +62,7 @@ carb_settings_iface.set_bool("/isaaclab/cameras_enabled", True)
 from task.lift.custom_pickplace_env_cfg_3_3 import YCBPickPlaceEnvCfg
 
 # gymnasium 라이브러리를 활용한 시뮬레이션 환경 선언
+# from task.lift.config.ik_abs_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg
 from task.lift.config.ik_abs_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg
 gym.register(
     id="Isaac-Lift-Cube-Franka-Custom-v0",
@@ -501,7 +502,7 @@ def main():
 
     # 환경 생성 및 초기화
     env = gym.make("Isaac-Lift-Cube-Franka-Custom-v0", cfg=env_cfg)
-    
+    print(env.action_space)
     # Get selected object names from the environment config
     # from task.lift.custom_pickplace_env_cfg_3_3 import SELECTED_OBJECT_NAMES
     # selected_names = SELECTED_OBJECT_NAMES
@@ -920,7 +921,7 @@ def main():
                                 im2_np = (im2_np * 255).astype(np.uint8)
                             else:
                                 im2_np = im2_np.astype(np.uint8)
-                            img_pil = Image.fromarray(im2_np)
+                            img_pil = Imaige.fromarray(im2_np)
                             new_w, new_h = img_pil.size[0] // 2, img_pil.size[1] // 2
                             img_pil_resized = img_pil.resize((new_w, new_h), Image.Resampling.LANCZOS)
                             img_pil_resized.save(os.path.join(log_dir, f'wrist_view/wrist_view_{save_count}.png'))                       
@@ -935,13 +936,16 @@ def main():
                     #     'robot_state': robotstate,
                     # }
                     # np.savez(os.path.join(log_dir, f'states_{step_count}.npz'), **data_dict)
+                print(actions)
 
+                # actions[0][-1] = float(input("gripper input = "))
+                # print(actions)
 
                 obs, rewards, terminated, truncated, info = env.step(actions)
                 if pick_and_place_sm.sm_state >=9:
                     print(" ")
-                print(f"reward = {rewards}")
-                print("===================")
+                # print(f"reward = {rewards}")
+                # print("===================")
                 # print(ee_pose[0])
                 # print(obs['policy'][0])
                 # print(robot_data.applied_torque)

@@ -96,7 +96,7 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
         """환경 생성 후 자동으로 실행되는 추가 세팅 코드"""
 
         # YCB object들 전체 읽어오기
-        ycb_obj_usd_paths = glob.glob('data/assets/ycb_usd/ycb/024_bowl/final.usd')
+        ycb_obj_usd_paths = glob.glob('data/assets/ycb_usd/ycb/077_rubiks_cube/final.usd')
 
         # YCB object 중 3가지 물체 random하게 설정
         selected_ycb_obj_usd_paths = random.sample(ycb_obj_usd_paths, 1)
@@ -151,6 +151,7 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
 
 """ MDP 세팅 (명령어, 액션, 관측, 보상, 이벤트 등) """
 
+""" MDP 세팅 (명령어, 액션, 관측, 보상, 이벤트 등) """
 @configclass
 class CommandsCfg:
     """MDP에 사용되는 명령어(command) 정의"""
@@ -221,25 +222,25 @@ class RewardsCfg:
     fixed_bin = RewTerm(
         func=mdp.fixed_bin,
         params={"std": 0.3, "command_name": "bin_pose"},
-        weight=-1.0,
+        weight=-10.0,
     )
     release = RewTerm(
         func=mdp.release,
         params={"std": 0.3, "minimal_height": 0.6, "command_name": "bin_pose"},
         weight=5.0,
     )
-    # object_bin_tracking = RewTerm(
-    #     func=mdp.object_goal_distance,
-    #     params={"std": 0.3, "minimal_height": 0.7, "command_name": "object_pose"},
-    #     weight=3.0,
-    # )
-    # action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
+
+    goal = RewTerm(
+        func=mdp.object_in_bin_without_ee_near_bin_sparse,
+        weight=50.0,
+    )
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
     # print("action_rate = {action_rate}")
-    # joint_vel = RewTerm(
-    #     func=mdp.joint_vel_l2,
-    #     weight=-1e-4,
-    #     params={"asset_cfg": SceneEntityCfg("robot")},
-    # )
+    joint_vel = RewTerm(
+        func=mdp.joint_vel_l2,
+        weight=-1e-4,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
     
 
 @configclass
@@ -247,17 +248,17 @@ class TerminationsCfg:
     """에피소드 종료 조건(termination) 설정"""
     # 모든 물체가 원하는 지점에 들어왔을때, 에피소드 종료
     object_reach_goal = DoneTerm(func=mdp.object_pickplace_goal)
-    #time_out = DoneTerm(func=mdp.time_out, time_out=True)
+    time_out = DoneTerm(func=mdp.time_out, time_out=True)
     
 
 @configclass
 class CurriculumCfg:
     """커리큘럼(curriculum) 보상 가중치 변경 등"""
     # action_rate = CurrTerm(
-    #     func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 10000}
+    #     func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 1000000}
     # )
     # joint_vel = CurrTerm(
-    #     func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 10000}
+    #     func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 1000000}
     # )
 
 """ 최종 환경 config """
