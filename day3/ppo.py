@@ -47,6 +47,8 @@ class Shared(GaussianMixin, DeterministicMixin, Model):
             self._shared_output = None
             return self.value_layer(shared_output), {}
 
+
+
 def set_config(env, device):
     cfg = PPO_DEFAULT_CONFIG.copy()
     cfg["rollouts"] = 96  # memory_size

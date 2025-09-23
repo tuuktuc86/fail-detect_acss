@@ -12,10 +12,6 @@ from skrl.resources.schedulers.torch import KLAdaptiveLR
 from skrl.trainers.torch import SequentialTrainer
 from skrl.utils import set_seed
 
-#env
-import argparse
-from isaaclab.app import AppLauncher
-import gymnasium as gym
 
 # seed for reproducibility
 set_seed()  # e.g. `set_seed(42)` for fixed seed
@@ -57,42 +53,8 @@ class Shared(GaussianMixin, DeterministicMixin, Model):
             return self.value_layer(shared_output), {}
 
 
-# Argparse로 CLI 인자 파싱 및 Omniverse 앱 실행
-parser = argparse.ArgumentParser(description="Tutorial on creating an empty stage.")
-parser.add_argument(
-    "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
-)
-args_cli = parser.parse_args()
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
-from isaaclab_tasks.utils.parse_cfg import parse_env_cfg
-from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils.math import subtract_frame_transforms
-
-
-# 커스텀 환경 시뮬레이션 환경 config 파일 임포트
-from task.pickandrelease.pickandrelease_env_cfg import ObjectTableSceneCfg
-
-# gymnasium 라이브러리를 활용한 시뮬레이션 환경 선언
-from task.pickandrelease.config.franka.ik_abs_env_cfg import FrankaYCBPickPlaceEnvCfg
-# 환경 및 설정 파싱
-env_cfg: YCBPickPlaceEnvCfg = parse_env_cfg(
-    "Isaac-Lift-Cube-Franka-Custom-v0",
-    device=args_cli.device,
-    num_envs=num_envs,
-    use_fabric=not args_cli.disable_fabric,
-)
-gym.register(
-    id="Isaac-Lift-Cube-Franka-Custom-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
-    kwargs={
-        "env_cfg_entry_point": FrankaYCBPickPlaceEnvCfg,
-    },
-    disable_env_checker=True,
-)
 # load and wrap the Isaac Lab environment
-env = gym.make("Isaac-Lift-Cube-Franka-Custom-v0", cfg=env_cfg)
-#env = load_isaaclab_env(task_name="Isaac-Lift-Cube-Franka-v0")
+env = load_isaaclab_env(task_name="Isaac-Lift-Cube-Franka-v0")
 env = wrap_env(env)
 
 device = env.device
@@ -150,22 +112,22 @@ agent = PPO(models=models,
 
 
 # configure and instantiate the RL trainer
-cfg_trainer = {"timesteps": 67200, "headless": False}
+cfg_trainer = {"timesteps": 67200, "headless": True}
 trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
 
-# start training
-trainer.train()
+# # start training
+# trainer.train()
 
 
 # # ---------------------------------------------------------
 # # comment the code above: `trainer.train()`, and...
 # # uncomment the following lines to evaluate a trained agent
 # # ---------------------------------------------------------
-# from skrl.utils.huggingface import download_model_from_huggingface
+from skrl.utils.huggingface import download_model_from_huggingface
 
-# # download the trained agent's checkpoint from Hugging Face Hub and load it
+# download the trained agent's checkpoint from Hugging Face Hub and load it
 # path = download_model_from_huggingface("skrl/IsaacOrbit-Isaac-Lift-Franka-v0-PPO", filename="agent.pt")
-# agent.load(path)
+agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v0/25-09-23_02-02-10-347908_PPO/checkpoints/best_agent.pt")
 
-# # start evaluation
-# trainer.eval()
+# start evaluation
+trainer.eval()

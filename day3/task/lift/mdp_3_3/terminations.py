@@ -1,32 +1,73 @@
+# import torch
+# from isaaclab.assets import RigidObject
+# from isaaclab.managers import SceneEntityCfg
+# from isaaclab.utils.math import combine_frame_transforms
+# from typing import TYPE_CHECKING
+# if TYPE_CHECKING:
+#     from isaaclab.envs import ManagerBasedRLEnv
+
+from __future__ import annotations
+
 import torch
+from typing import TYPE_CHECKING
+
 from isaaclab.assets import RigidObject
 from isaaclab.managers import SceneEntityCfg
-from typing import TYPE_CHECKING
+from isaaclab.utils.math import combine_frame_transforms
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
-def object_pickplace_goal(
-    env: "ManagerBasedRLEnv",
-    threshold: float = 0.25,
-    threshold_z: float = 0.05,
+# def object_pickplace_goal(
+#     env: "ManagerBasedRLEnv",
+#     threshold: float = 0.25,
+#     threshold_z: float = 0.05,
+#     object_cfg: SceneEntityCfg = SceneEntityCfg("object_0"),
+#     bin_cfg: SceneEntityCfg = SceneEntityCfg("bin"),
+# ) -> torch.Tensor:
+#     # 이름을 확실히 고정
+#     obj: RigidObject = env.scene["object_0"]
+#     bin_obj: RigidObject = env.scene["bin"]
+
+#     bin_pos = bin_obj.data.root_pos_w           # [N, 3]
+#     obj_pos = obj.data.root_pos_w               # [N, 3]
+
+#     d_xy = torch.norm(bin_pos[:, :2] - obj_pos[:, :2], dim=1)   # [N]
+#     d_z  = torch.abs(bin_pos[:, 2] - obj_pos[:, 2])             # [N]
+
+#     done = (d_xy < threshold) & (d_z < threshold_z)             # [N], bool
+#     return done
+
+
+def object_reached_goal(
+    env: ManagerBasedRLEnv,
+    command_name: str = "object_pose",
+    threshold: float = 0.02,
+    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     object_cfg: SceneEntityCfg = SceneEntityCfg("object_0"),
-    bin_cfg: SceneEntityCfg = SceneEntityCfg("bin"),
 ) -> torch.Tensor:
-    # 이름을 확실히 고정
-    obj: RigidObject = env.scene["object_0"]
-    bin_obj: RigidObject = env.scene["bin"]
+    """Termination condition for the object reaching the goal position.
 
-    bin_pos = bin_obj.data.root_pos_w           # [N, 3]
-    obj_pos = obj.data.root_pos_w               # [N, 3]
+    Args:
+        env: The environment.
+        command_name: The name of the command that is used to control the object.
+        threshold: The threshold for the object to reach the goal position. Defaults to 0.02.
+        robot_cfg: The robot configuration. Defaults to SceneEntityCfg("robot").
+        object_cfg: The object configuration. Defaults to SceneEntityCfg("object").
 
-    d_xy = torch.norm(bin_pos[:, :2] - obj_pos[:, :2], dim=1)   # [N]
-    d_z  = torch.abs(bin_pos[:, 2] - obj_pos[:, 2])             # [N]
+    """
+    # extract the used quantities (to enable type-hinting)
+    robot: RigidObject = env.scene[robot_cfg.name]
+    object: RigidObject = env.scene[object_cfg.name]
+    command = env.command_manager.get_command(command_name)
+    # compute the desired position in the world frame
+    des_pos_b = command[:, :3]
+    des_pos_w, _ = combine_frame_transforms(robot.data.root_pos_w, robot.data.root_quat_w, des_pos_b)
+    # distance of the end-effector to the object: (num_envs,)
+    distance = torch.norm(des_pos_w - object.data.root_pos_w[:, :3], dim=1)
 
-    done = (d_xy < threshold) & (d_z < threshold_z)             # [N], bool
-    return done
-
-
-
+    # rewarded if the object is lifted above the threshold
+    return distance < threshold
 
 
 

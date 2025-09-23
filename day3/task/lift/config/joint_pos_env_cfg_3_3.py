@@ -49,38 +49,10 @@ class FrankaYCBPickPlaceEnvCfg(YCBPickPlaceEnvCfg):
             close_command_expr={"panda_finger_.*": 0.0},    # 닫을 때 명령어
         )
 
-        # 3. 오브젝트 명령(command) 설정 시, 엔드이펙터 바디 명칭 지정
-        # self.commands.object_pose.body_name = "panda_hand"
+        #3. 오브젝트 명령(command) 설정 시, 엔드이펙터 바디 명칭 지정
+        self.commands.object_pose.body_name = "panda_hand"
 
-        # 4. 카메라 센서 설정 (handeye 카메라: 프랑카 손 끝에 부착)
-        # self.scene.camera = CameraCfg(
-        #     prim_path="{ENV_REGEX_NS}/Robot/panda_hand/handeye_camera",      # 카메라가 위치할 prim 경로
-        #     update_period=0.1,      # 시뮬레이션 업데이트 간격(초)
-        #     height=480, width=640,  # 해상도
-        #     data_types=["rgb", "distance_to_image_plane"],      # RGB+Depth
-        #     spawn=PinholeCameraCfg(
-        #         focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 1.0e5)
-        #     ),
-        #     # 카메라 위치/방향 오프셋 (ROS convention, Z축 90도 회전)
-        #     offset=CameraCfg.OffsetCfg(pos=(0.1, 0.035, 0.0), rot=(0.70710678, 0.0, 0.0, 0.70710678), convention="ros"),
-        # )
-
-        # # # 5. 두 번째 카메라 설정 (다른 각도나 위치)
-        # self.scene.camera2 = CameraCfg(
-        #     prim_path="{ENV_REGEX_NS}/Robot/panda_hand/handeye_camera2", # 다른 prim 경로
-        #     update_period=0.1,
-        #     height=480, width=640,
-        #     data_types=["rgb", "distance_to_image_plane"],
-        #     spawn=PinholeCameraCfg(
-        #         focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 1.0e5)
-        #     ),
-        #     # 다른 위치/방향 오프셋 (예: 더 아래쪽을 보는 카메라)
-        #     offset=CameraCfg.OffsetCfg(
-        #         pos=(0.05, 0.0, -0.03),
-        #         rot=(0.70710678, 0.0, 0.0, 0.70710678),  # 아래쪽 틸트
-        #         convention="ros"
-        #     ),
-        # )     
+        # c
         
         # 5. 엔드이펙터(EE) 프레임(좌표계) 설정 및 프레임 시각화 마커 세팅
         marker_cfg = FRAME_MARKER_CFG.copy()

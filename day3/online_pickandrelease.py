@@ -31,7 +31,7 @@ def main():
                 device=device)
     # agent.load("/fail-detect_acss/runs/torch/isaac-Lift-Franka-v0/checkpoints/best_agent.pt")
     # configure and instantiate the RL trainer
-    cfg_trainer = {"timesteps": 1000000, "headless": True}
+    cfg_trainer = {"timesteps": 67200, "headless": True}
     trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)\
 
     # start training

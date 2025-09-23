@@ -49,7 +49,7 @@ from isaaclab.managers import SceneEntityCfg
 from task.lift.custom_pickplace_env_cfg_3_3 import YCBPickPlaceEnvCfg
 
 # gymnasium 라이브러리를 활용한 시뮬레이션 환경 선언
-from task.lift.config.ik_abs_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg
+from task.lift.config.ik_rel_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg
 gym.register(
     id="Isaac-Lift-Cube-Franka-Custom-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
@@ -90,8 +90,8 @@ def main():
                 observation_space=env.observation_space,
                 action_space=env.action_space,
                 device=device)
-    agent.load("/fail-detect_acss/runs/torch/isaac-Lift-Franka-v0/25-09-16_13-16-31-370387_PPO/checkpoints/best_agent.pt")
-
+    agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v1/25-09-22_14-59-13-172964_PPO/checkpoints/agent_2000000.pt")
+    
     for m in agent.models.values():
         m.eval()
     max_steps = 600

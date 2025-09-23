@@ -44,7 +44,9 @@ from isaaclab.managers import SceneEntityCfg
 from task.lift.custom_pickplace_env_cfg_3_3 import YCBPickPlaceEnvCfg
 
 # gymnasium 라이브러리를 활용한 시뮬레이션 환경 선언
-from task.lift.config.ik_abs_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg
+# from task.lift.config.ik_rel_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg # i change it to rel
+from task.lift.config.joint_pos_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg
+
 gym.register(
     id="Isaac-Lift-Cube-Franka-Custom-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
