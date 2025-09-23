@@ -32,7 +32,7 @@ parser.add_argument(
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
-args_cli.headless = True
+args_cli.headless = False
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -41,14 +41,14 @@ from isaaclab.managers import SceneEntityCfg
 
 
 # 커스텀 환경 시뮬레이션 환경 config 파일 임포트
-from lift.lift_env_cfg import LiftEnvCfg
+from lift.lift_env_cfg import YCLiftEnvCfg
 
 # gymnasium 라이브러리를 활용한 시뮬레이션 환경 선언
 from lift.config.franka.ik_rel_env_cfg import FrankaCubeLiftEnvCfg # i change it to rel
 # from lift.config.franka.joint_pos_env_cfg import FrankaCubeLiftEnvCfg
 
 gym.register(
-    id="Isaac-Lift-Cube-Franka-Custom-v0",
+    id="Isaac-Lift-Cube-Franka-Custom-v1",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     kwargs={
         "env_cfg_entry_point": FrankaCubeLiftEnvCfg,
@@ -56,18 +56,18 @@ gym.register(
     disable_env_checker=True,
 )
 
-num_envs =4096 #please check headless. or it may cause a probnlem
+num_envs =10 #please check headless. or it may cause a probnlem
 
 # 환경 및 설정 파싱
-env_cfg: LiftEnvCfg = parse_env_cfg(
-    "Isaac-Lift-Cube-Franka-Custom-v0",
+env_cfg: YCLiftEnvCfg = parse_env_cfg(
+    "Isaac-Lift-Cube-Franka-Custom-v1",
     device=args_cli.device,
     num_envs=num_envs,
     use_fabric=not args_cli.disable_fabric,
    
 )
 
-def make_env(id = "Isaac-Lift-Cube-Franka-Custom-v0"):
+def make_env(id = "Isaac-Lift-Cube-Franka-Custom-v1"):
 
     # 환경 생성 및 초기화
     env = gym.make(id, cfg=env_cfg)

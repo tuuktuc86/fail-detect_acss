@@ -22,6 +22,22 @@ from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
 from . import mdp
+#
+import glob
+import random
+import os
+from isaaclab.sim.spawners import materials
+
+
+@configclass
+class CustomUsdFileCfg(UsdFileCfg):
+    """커스텀 USD 파일 config - 물리 소재 경로를 지정하기 위함(기존의 UsdFileCfg 에는 물리 소재가 없음)"""
+
+    # Prim에 적용할 물리 소재 경로 (상대 경로 가능)
+    physics_material_path: str = "material"
+
+    # 물리 소재를 명시적으로 지정. None이면 적용 안 함.
+    physics_material: materials.PhysicsMaterialCfg | None = None
 
 ##
 # Scene definition
@@ -43,16 +59,29 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
     object: RigidObjectCfg | DeformableObjectCfg = MISSING
 
     # Table
-    table = AssetBaseCfg(
+    # table = AssetBaseCfg(
+    #     prim_path="{ENV_REGEX_NS}/Table",
+    #     init_state=AssetBaseCfg.InitialStateCfg(pos=[0.5, 0, 0], rot=[0.707, 0, 0, 0.707]),
+    #     spawn=UsdFileCfg(usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd"),
+    # )
+
+    table: AssetBaseCfg = AssetBaseCfg(
         prim_path="{ENV_REGEX_NS}/Table",
-        init_state=AssetBaseCfg.InitialStateCfg(pos=[0.5, 0, 0], rot=[0.707, 0, 0, 0.707]),
-        spawn=UsdFileCfg(usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd"),
+        spawn=sim_utils.CuboidCfg(
+                size=(1.6, 2.0, 0.5),
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5), metallic=0.2, roughness=0.5),
+                physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=0.8, dynamic_friction=0.5, restitution=0.1),
+                collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=True),
+            ),
+        # init_state=AssetBaseCfg.InitialStateCfg(pos=(0.2, 0.4, 0.25)),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.2, 0.4, -0.25)),
     )
 
     # plane
     plane = AssetBaseCfg(
         prim_path="/World/GroundPlane",
-        init_state=AssetBaseCfg.InitialStateCfg(pos=[0, 0, -1.05]),
+        #init_state=AssetBaseCfg.InitialStateCfg(pos=[0, 0, -1.05]),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=[0, 0, -1.55]),
         spawn=GroundPlaneCfg(),
     )
 
@@ -61,7 +90,80 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
         prim_path="/World/light",
         spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
     )
+    # 바구니(Bin) 오브젝트
+    bin = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/bin",
+        #init_state=RigidObjectCfg.InitialStateCfg(pos=(0.2, 0.6, 0.555), rot=[0.7071, 0.7071, 0, 0]),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.2, 0.6, 0.055), rot=[0.7071, 0.7071, 0, 0]),
+        spawn=sim_utils.UsdFileCfg(
+            usd_path='data/assets/basket/basket.usd',
+            scale=(0.8, 0.25, 0.8),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.7, 0.5), metallic=0.2, roughness=0.5),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                solver_position_iteration_count=16,
+                solver_velocity_iteration_count=1,
+                max_angular_velocity=1000.0,
+                max_linear_velocity=1000.0,
+                max_depenetration_velocity=5.0,
+                disable_gravity=False,
+            ),
+            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),
+        ),
+    )
+    # def __post_init__(self):
+    #     """환경 생성 후 자동으로 실행되는 추가 세팅 코드"""
 
+    #     # YCB object들 전체 읽어오기
+    #     ycb_obj_usd_paths = glob.glob('data/assets/ycb_usd/ycb/077_rubiks_cube/final.usd')
+    #     print(ycb_obj_usd_paths)
+    #     # YCB object 중 3가지 물체 random하게 설정
+    #     selected_ycb_obj_usd_paths = random.sample(ycb_obj_usd_paths, 1)
+        
+    #     # YCB object 놓을 위치 지정(카메라 view에 맞게)
+    #     objects_position = [[0.4, 0.0, 0.51],
+    #                         [0.48, -0.15, 0.6],
+    #                         [0.4, -0.3, 0.6]]
+
+    #     # 각 물체 로드
+    #     for i in range(len(selected_ycb_obj_usd_paths)):
+
+    #         # 지정된 위치에서 일정 거리 내에 random하게 위치 재설정 (0.05 이내)
+    #         # 물체가 안겹치게 생성되도록 z위치를 조금씩 다르게 설정하는 것이 좋음
+    #         #  근데 난 바꿈
+    #         random_position = [objects_position[i][0] + random.random() * 0.00, 
+    #                            objects_position[i][1] + random.random() * 0.00, 
+    #                            objects_position[i][2] + 0.05 * i]
+            
+    #         # YCB object 경로를 절대 경로로 설정
+    #         ycb_obj_usd_path = os.path.join(os.getcwd(), selected_ycb_obj_usd_paths[i])
+
+    #         # 각 객체 이름 설정 및 material 경로 지정
+    #         attr_name = f"object_{i}"
+    #         physical_material_path = f"{{ENV_REGEX_NS}}/{attr_name}/physical_material"
+
+    #         # 실제로 사용할 object config 세팅 (physics_material에서 friction을 설정해줘야 물체를 잘 잡을 수 있음)
+    #         obj_cfg = RigidObjectCfg(
+    #             prim_path=f"{{ENV_REGEX_NS}}/{attr_name}",
+    #             init_state=RigidObjectCfg.InitialStateCfg(pos=random_position, rot=[1, 0, 0, 0]),
+    #             spawn=CustomUsdFileCfg(
+    #                 usd_path=ycb_obj_usd_path,
+    #                 scale=(1, 1, 1),
+    #                 rigid_props=sim_utils.RigidBodyPropertiesCfg(
+    #                 solver_position_iteration_count=16,
+    #                 solver_velocity_iteration_count=1,
+    #                 max_angular_velocity=1000.0,
+    #                 max_linear_velocity=1000.0,
+    #                 max_depenetration_velocity=5.0,
+    #                 disable_gravity=False,
+    #                 ),
+    #                 mass_props=sim_utils.MassPropertiesCfg(mass=0.1),
+    #                 physics_material_path=physical_material_path,
+    #                 physics_material=sim_utils.RigidBodyMaterialCfg(static_friction=10.0, dynamic_friction=10.0, restitution=0.0),
+    #             ),
+    #         )
+            
+    #         # config에 객체 속성 추가
+    #         setattr(self, attr_name, obj_cfg)
 
 ##
 # MDP settings
@@ -119,12 +221,12 @@ class EventCfg:
     """Configuration for events."""
 
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
-
+ #초기설정 기준으로 world 좌표 기준 아님
     reset_object_position = EventTerm(
         func=mdp.reset_root_state_uniform,
         mode="reset",
         params={
-            "pose_range": {"x": (-0.1, 0.1), "y": (-0.25, 0.25), "z": (0.0, 0.0)},
+            "pose_range": {"x": (-0.1, 0.1), "y": (-0.1, 0.1), "z": (0.0, 0.0)},
             "velocity_range": {},
             "asset_cfg": SceneEntityCfg("object", body_names="Object"),
         },
@@ -191,7 +293,7 @@ class CurriculumCfg:
 
 
 @configclass
-class LiftEnvCfg(ManagerBasedRLEnvCfg):
+class YCLiftEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the lifting environment."""
 
     # Scene settings
