@@ -2,17 +2,16 @@ import torch
 import torch.nn as nn
 
 # import the skrl components to build the RL system
-from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
-from skrl.envs.loaders.torch import load_isaaclab_env
-from skrl.envs.wrappers.torch import wrap_env
-from skrl.memories.torch import RandomMemory
-from skrl.models.torch import DeterministicMixin, GaussianMixin, Model
-from skrl.resources.preprocessors.torch import RunningStandardScaler
-from skrl.resources.schedulers.torch import KLAdaptiveLR
-from skrl.trainers.torch import SequentialTrainer
-from skrl.utils import set_seed
-
-
+from day3.skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
+from day3.skrl.envs.loaders.torch import load_isaaclab_env
+from day3.skrl.envs.wrappers.torch import wrap_env
+from day3.skrl.memories.torch import RandomMemory
+from day3.skrl.models.torch import DeterministicMixin, GaussianMixin, Model
+from day3.skrl.resources.preprocessors.torch import RunningStandardScaler
+from day3.skrl.resources.schedulers.torch import KLAdaptiveLR
+from day3.skrl.trainers.torch import SequentialTrainer
+from day3.skrl.utils import set_seed
+from lift import set_env
 # seed for reproducibility
 set_seed()  # e.g. `set_seed(42)` for fixed seed
 
@@ -54,11 +53,10 @@ class Shared(GaussianMixin, DeterministicMixin, Model):
 
 
 # load and wrap the Isaac Lab environment
-env = load_isaaclab_env(task_name="Isaac-Lift-Cube-Franka-v0")
-env = wrap_env(env)
+env = set_env.make_env()
 
 device = env.device
-
+print(f"Environment reset. Number of environments: {env.unwrapped.num_envs}")
 
 # instantiate a memory as rollout buffer (any memory can be used for this)
 memory = RandomMemory(memory_size=96, num_envs=env.num_envs, device=device)
@@ -101,7 +99,7 @@ cfg["value_preprocessor_kwargs"] = {"size": 1, "device": device}
 # logging to TensorBoard and write checkpoints (in timesteps)
 cfg["experiment"]["write_interval"] = 336
 cfg["experiment"]["checkpoint_interval"] = 3360
-cfg["experiment"]["directory"] = "runs/torch/Isaac-Lift-Franka-v0"
+cfg["experiment"]["directory"] = "runs/torch/Isaac-Lift-Franka-v2"
 
 agent = PPO(models=models,
             memory=memory,
@@ -112,22 +110,22 @@ agent = PPO(models=models,
 
 
 # configure and instantiate the RL trainer
-cfg_trainer = {"timesteps": 67200, "headless": True}
+cfg_trainer = {"timesteps": 67200, "headless": False}
 trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
 
-# # start training
-# trainer.train()
+# start training
+trainer.train()
 
 
 # # ---------------------------------------------------------
 # # comment the code above: `trainer.train()`, and...
 # # uncomment the following lines to evaluate a trained agent
 # # ---------------------------------------------------------
-from skrl.utils.huggingface import download_model_from_huggingface
+# from skrl.utils.huggingface import download_model_from_huggingface
 
-# download the trained agent's checkpoint from Hugging Face Hub and load it
-# path = download_model_from_huggingface("skrl/IsaacOrbit-Isaac-Lift-Franka-v0-PPO", filename="agent.pt")
-agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v0/25-09-23_02-02-10-347908_PPO/checkpoints/best_agent.pt")
+# # download the trained agent's checkpoint from Hugging Face Hub and load it
+# # path = download_model_from_huggingface("skrl/IsaacOrbit-Isaac-Lift-Franka-v0-PPO", filename="agent.pt")
+# agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v1/25-09-23_08-06-05-745352_PPO/checkpoints/best_agent.pt")
 
-# start evaluation
-trainer.eval()
+# # start evaluation
+# trainer.eval()

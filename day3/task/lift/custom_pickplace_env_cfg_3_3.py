@@ -100,7 +100,7 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
         print(ycb_obj_usd_paths)
         # YCB object 중 3가지 물체 random하게 설정
         selected_ycb_obj_usd_paths = random.sample(ycb_obj_usd_paths, 1)
-
+        
         # YCB object 놓을 위치 지정(카메라 view에 맞게)
         objects_position = [[0.4, 0.0, 0.51],
                             [0.48, -0.15, 0.6],
@@ -114,7 +114,7 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
             #  근데 난 바꿈
             random_position = [objects_position[i][0] + random.random() * 0.00, 
                                objects_position[i][1] + random.random() * 0.00, 
-                               objects_position[i][2] + 0.02 * i]
+                               objects_position[i][2] + 0.05 * i]
             
             # YCB object 경로를 절대 경로로 설정
             ycb_obj_usd_path = os.path.join(os.getcwd(), selected_ycb_obj_usd_paths[i])
@@ -216,8 +216,16 @@ class ObservationsCfg:
 class EventCfg:
     """이벤트(event) 처리에 대한 설정"""
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
-
-
+    
+    reset_object_position = EventTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {"x": (-0.1, 0.1), "y": (-0.25, 0.25), "z": (0.05, 0.05)},
+            "velocity_range": {},
+            "asset_cfg": SceneEntityCfg("object_0", body_names="Object_0"),
+        },
+    )
 # @configclass
 # class RewardsCfg:
 #     """보상(reward) 항목 설정 - 강화학습 개발시 필요"""

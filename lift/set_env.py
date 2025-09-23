@@ -6,15 +6,15 @@ from scipy.spatial.transform import Rotation as R
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
 import gymnasium as gym
-from skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
-from skrl.envs.loaders.torch import load_isaaclab_env
-from skrl.envs.wrappers.torch import wrap_env
-from skrl.memories.torch import RandomMemory
-from skrl.models.torch import DeterministicMixin, GaussianMixin, Model
-from skrl.resources.preprocessors.torch import RunningStandardScaler
-from skrl.resources.schedulers.torch import KLAdaptiveLR
-from skrl.trainers.torch import SequentialTrainer
-from skrl.utils import set_seed 
+from day3.skrl.agents.torch.ppo import PPO, PPO_DEFAULT_CONFIG
+from day3.skrl.envs.loaders.torch import load_isaaclab_env
+from day3.skrl.envs.wrappers.torch import wrap_env
+from day3.skrl.memories.torch import RandomMemory
+from day3.skrl.models.torch import DeterministicMixin, GaussianMixin, Model
+from day3.skrl.resources.preprocessors.torch import RunningStandardScaler
+from day3.skrl.resources.schedulers.torch import KLAdaptiveLR
+from day3.skrl.trainers.torch import SequentialTrainer
+from day3.skrl.utils import set_seed 
 
 
 set_seed()  # e.g. `set_seed(42)` for fixed seed
@@ -41,24 +41,25 @@ from isaaclab.managers import SceneEntityCfg
 
 
 # 커스텀 환경 시뮬레이션 환경 config 파일 임포트
-from task.lift.custom_pickplace_env_cfg_3_3 import YCBPickPlaceEnvCfg
+from lift.lift_env_cfg import LiftEnvCfg
 
 # gymnasium 라이브러리를 활용한 시뮬레이션 환경 선언
 # from task.lift.config.ik_rel_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg # i change it to rel
-from task.lift.config.joint_pos_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg
+from lift.config.franka.joint_pos_env_cfg import FrankaCubeLiftEnvCfg
 
 gym.register(
     id="Isaac-Lift-Cube-Franka-Custom-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     kwargs={
-        "env_cfg_entry_point": FrankaYCBPickPlaceEnvCfg,
+        "env_cfg_entry_point": FrankaCubeLiftEnvCfg,
     },
     disable_env_checker=True,
 )
 
-num_envs =4096
+num_envs =4096 #please check headless. or it may cause a probnlem
+
 # 환경 및 설정 파싱
-env_cfg: YCBPickPlaceEnvCfg = parse_env_cfg(
+env_cfg: LiftEnvCfg = parse_env_cfg(
     "Isaac-Lift-Cube-Franka-Custom-v0",
     device=args_cli.device,
     num_envs=num_envs,

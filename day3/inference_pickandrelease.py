@@ -49,7 +49,8 @@ from isaaclab.managers import SceneEntityCfg
 from task.lift.custom_pickplace_env_cfg_3_3 import YCBPickPlaceEnvCfg
 
 # gymnasium 라이브러리를 활용한 시뮬레이션 환경 선언
-from task.lift.config.ik_rel_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg
+# from task.lift.config.ik_rel_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg
+from task.lift.config.joint_pos_env_cfg_3_3 import FrankaYCBPickPlaceEnvCfg
 gym.register(
     id="Isaac-Lift-Cube-Franka-Custom-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
@@ -90,11 +91,11 @@ def main():
                 observation_space=env.observation_space,
                 action_space=env.action_space,
                 device=device)
-    agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v1/25-09-22_14-59-13-172964_PPO/checkpoints/agent_2000000.pt")
-    
+    agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v1/25-09-23_08-06-05-745352_PPO/checkpoints/best_agent.pt")
+
     for m in agent.models.values():
         m.eval()
-    max_steps = 600
+    max_steps = 500
     episodes=5
     for ep in range(episodes):
         obs, _ = env.reset()
@@ -104,7 +105,7 @@ def main():
             # 행동 계산(정책의 평균 행동을 사용하도록 eval 모드 + no_grad)
             actions, _, _ = agent.act(obs, timestep=0, timesteps=0)
             #actions[0, -1] = torch.where(actions[0, -1] < 0, torch.tensor(-1.), torch.tensor(1.))
-            print(actions)
+            #print(actions)
         
             obs, rew, terminated, truncated, info = env.step(actions)
             ep_ret += rew.mean().item() if torch.is_tensor(rew) else float(rew)
