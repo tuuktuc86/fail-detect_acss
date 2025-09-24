@@ -24,6 +24,11 @@ set_seed()  # e.g. `set_seed(42)` for fixed seed
 from isaaclab.app import AppLauncher
 
 
+    
+
+
+
+
 # Argparse로 CLI 인자 파싱 및 Omniverse 앱 실행
 parser = argparse.ArgumentParser(description="Tutorial on creating an empty stage.")
 parser.add_argument(
@@ -32,7 +37,18 @@ parser.add_argument(
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
-args_cli.headless = False
+args_cli.headless = True
+
+
+
+num_envs =4096 #please check headless. or it may cause a probnlem
+
+if num_envs > 20:
+    args_cli.headless = True
+
+else:
+    args_cli.headless = False
+
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -56,7 +72,7 @@ gym.register(
     disable_env_checker=True,
 )
 
-num_envs =10 #please check headless. or it may cause a probnlem
+
 
 # 환경 및 설정 파싱
 env_cfg: YCLiftEnvCfg = parse_env_cfg(

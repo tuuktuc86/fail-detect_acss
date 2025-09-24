@@ -84,6 +84,8 @@ cfg["learning_rate_scheduler_kwargs"] = {"kl_threshold": 0.01, "min_lr": 1e-5}
 cfg["random_timesteps"] = 0
 cfg["learning_starts"] = 0
 cfg["grad_norm_clip"] = 1.0
+
+
 cfg["ratio_clip"] = 0.2
 cfg["value_clip"] = 0.2
 cfg["clip_predicted_values"] = True
@@ -110,7 +112,7 @@ agent = PPO(models=models,
 
 
 # configure and instantiate the RL trainer
-cfg_trainer = {"timesteps": 67200, "headless": False}
+cfg_trainer = {"timesteps": 100000, "headless": False}
 trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
 
 # start training
@@ -125,7 +127,7 @@ trainer.train()
 
 # # download the trained agent's checkpoint from Hugging Face Hub and load it
 # # path = download_model_from_huggingface("skrl/IsaacOrbit-Isaac-Lift-Franka-v0-PPO", filename="agent.pt")
-# agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v1/25-09-23_08-06-05-745352_PPO/checkpoints/best_agent.pt")
+# agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v2/25-09-23_15-37-44-473411_PPO/checkpoints/best_agent.pt")
 
 # # start evaluation
 # trainer.eval()
