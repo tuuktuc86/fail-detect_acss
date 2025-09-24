@@ -26,12 +26,7 @@ class FrankaCubeLiftEnvCfg(YCLiftEnvCfg):
     def __post_init__(self):
         # post init of parent
         super().__post_init__()
-        # print("joint_pos")
-        # print("joint_pos")
-        # print("joint_pos")
-        # print("joint_pos")
-        # print("joint_pos")
-        # print("joint_pos")
+
 
         # Set Franka as robot
         self.scene.robot = FRANKA_PANDA_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
@@ -47,7 +42,7 @@ class FrankaCubeLiftEnvCfg(YCLiftEnvCfg):
             close_command_expr={"panda_finger_.*": 0.0},
         )
         # Set the body name for the end effector
-        self.commands.object_pose.body_name = "panda_hand"
+        self.commands.object_desired_pose.body_name = "panda_hand"
 
         # Set Cube as object
         self.scene.object = RigidObjectCfg(

@@ -11,7 +11,7 @@ from day3.skrl.resources.preprocessors.torch import RunningStandardScaler
 from day3.skrl.resources.schedulers.torch import KLAdaptiveLR
 from day3.skrl.trainers.torch import SequentialTrainer
 from day3.skrl.utils import set_seed
-from lift import set_env
+from lift import set_env_Inference
 # seed for reproducibility
 set_seed()  # e.g. `set_seed(42)` for fixed seed
 
@@ -53,7 +53,7 @@ class Shared(GaussianMixin, DeterministicMixin, Model):
 
 
 # load and wrap the Isaac Lab environment
-env = set_env.make_env()
+env = set_env_Inference.make_env()
 
 device = env.device
 print(f"Environment reset. Number of environments: {env.unwrapped.num_envs}")
@@ -99,9 +99,9 @@ cfg["state_preprocessor_kwargs"] = {"size": env.observation_space, "device": dev
 cfg["value_preprocessor"] = RunningStandardScaler
 cfg["value_preprocessor_kwargs"] = {"size": 1, "device": device}
 # logging to TensorBoard and write checkpoints (in timesteps)
-cfg["experiment"]["write_interval"] = 100
-cfg["experiment"]["checkpoint_interval"] = 5000.
-cfg["experiment"]["directory"] = "runs/torch/Isaac-Lift-Franka-v3" #2 for lift, 3 for reaching
+cfg["experiment"]["write_interval"] = 336
+cfg["experiment"]["checkpoint_interval"] = 3360.
+cfg["experiment"]["directory"] = "runs/torch/Isaac-Lift-Franka-v2"
 
 agent = PPO(models=models,
             memory=memory,
@@ -114,10 +114,9 @@ agent = PPO(models=models,
 # configure and instantiate the RL trainer
 cfg_trainer = {"timesteps": 100000, "headless": False}
 trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
-# agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v2/25-09-24_03-26-39-092765_PPO_deltaRel(set_origin)/checkpoints/best_agent.pt")
 
-# start training
-trainer.train()
+# # start training
+# trainer.train()
 
 
 # # ---------------------------------------------------------
@@ -128,7 +127,31 @@ trainer.train()
 
 # # download the trained agent's checkpoint from Hugging Face Hub and load it
 # path = download_model_from_huggingface("skrl/IsaacOrbit-Isaac-Lift-Franka-v0-PPO", filename="agent.pt")
-# agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v2/25-09-24_03-26-39-092765_PPO/checkpoints/best_agent.pt")
+agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v3/25-09-24_09-05-09-341960_PPO/checkpoints/best_agent.pt")
 
-# # start evaluation
-# trainer.eval()
+
+
+
+
+max_steps = 200
+episodes=5
+for ep in range(episodes):
+    obs, _ = env.reset()
+    ep_ret = 0.0
+    steps = 0
+    while True:
+        # 행동 계산(정책의 평균 행동을 사용하도록 eval 모드 + no_grad)
+        actions, _, _ = agent.act(obs, timestep=0, timesteps=0)
+        #actions[0, -1] = torch.where(actions[0, -1] < 0, torch.tensor(-1.), torch.tensor(1.))
+        #print(actions)
+    
+        obs, rew, terminated, truncated, info = env.step(actions)
+        ep_ret += rew.mean().item() if torch.is_tensor(rew) else float(rew)
+        steps += 1
+
+
+        done = bool(getattr(terminated, "any", lambda: terminated)()) or \
+                bool(getattr(truncated, "any", lambda: truncated)())
+        if done or (max_steps is not None and steps >= max_steps):
+            print(f"[Episode {ep+1}] return={ep_ret:.3f}, steps={steps}")
+            break
