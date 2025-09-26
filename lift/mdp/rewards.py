@@ -120,3 +120,44 @@ def object_in_goal(
     # 조건: 객체는 bin 안, EE는 bin 밖
     reward_bool = in_bin & ee_outside                           # [N] bool
     return reward_bool.float()                                   # sparse: 0 or 1
+
+
+# @generic_io_descriptor(
+#     units="m/s", axes=["X", "Y", "Z"], observation_type="RootState", on_inspect=[record_shape, record_dtype]
+# )
+# def root_lin_vel_w_all(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+#     """Asset root linear velocity in the environment frame."""
+#     # extract the used quantities (to enable type-hinting)
+#     asset: RigidObject = env.scene[asset_cfg.name]
+#     return asset.data.root_lin_vel_w
+
+
+# def object_lin_vel(
+#     env: ManagerBasedRLEnv,
+#     object_cfg: SceneEntityCfg = SceneEntityCfg("object"),
+#     threshold: float = 0.3, # 0.5 정도면 적당할듯
+# ) -> torch.Tensor:
+#     object_vel = RigidObject = env.scene[object_cfg.name].root_lin_vel_w
+#     speed = torch.linalg.norm(object_vel, dim=-1)
+#     excess = torch.clamp(speed - threshold, min=0.0)
+#     reward_lin_vel = excess**2
+#     return reward_lin_vel
+
+def object_speed_reward(
+    env: ManagerBasedRLEnv,
+    threshold: float = 0.5,   # 기준 속도
+    small_reward: float = 0.1, # 임계값 이하 보상
+    growth_rate: float = 2.0, # 지수 증가 속도
+    object_cfg: SceneEntityCfg = SceneEntityCfg("object"),
+) -> torch.Tensor:
+    v = env.scene[object_cfg.name].data.root_lin_vel_w
+    speed = torch.linalg.norm(v, dim=-1)
+
+    # threshold 이하일 때: 작은 보상
+    base = (speed <= threshold).float() * small_reward
+
+    # threshold 초과일 때: 초과분에 지수 보상
+    excess = torch.clamp(speed - threshold, min=0.0)
+    exp_reward = (speed > threshold).float() * torch.exp(growth_rate * excess)
+
+    return base + exp_reward

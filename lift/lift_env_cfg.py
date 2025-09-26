@@ -263,6 +263,13 @@ class RewardsCfg:
         weight=100.0,
     )
 
+    object_vel = RewTerm(
+        func=mdp.object_speed_reward,
+        weight=0,
+        #params={"asset_cfg": SceneEntityCfg("object")}
+    )
+
+
     # action penalty
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
 
@@ -287,13 +294,29 @@ class TerminationsCfg:
 @configclass
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
-
+    #1st
     action_rate = CurrTerm(
         func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 30000}
     )
 
     joint_vel = CurrTerm(
         func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 30000}
+    )
+
+    object_vel = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "object_vel", "weight": -1e-6, "num_steps": 30000}
+    )
+    #2nd
+    action_rate = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1, "num_steps": 60000}
+    )
+
+    joint_vel = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1, "num_steps": 60000}
+    )
+
+    object_vel = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "object_vel", "weight": -1e-4, "num_steps": 60000}
     )
 
 

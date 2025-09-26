@@ -278,6 +278,12 @@ class RewardsCfg:
         weight=5.0,
     )
 
+    # object_vel_constrain = RewTerm(
+    #     func=mdp.object_vel_constrain,
+    #     params={"std": 0.05, "minimal_height": 0.04, "command_name": "object_pose"},
+    #     weight=5.0,
+    # )
+
     # action penalty
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
 

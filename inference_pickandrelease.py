@@ -127,7 +127,7 @@ trainer = SequentialTrainer(cfg=cfg_trainer, env=env, agents=agent)
 
 # # download the trained agent's checkpoint from Hugging Face Hub and load it
 # path = download_model_from_huggingface("skrl/IsaacOrbit-Isaac-Lift-Franka-v0-PPO", filename="agent.pt")
-agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v3/25-09-24_09-05-09-341960_PPO/checkpoints/best_agent.pt")
+agent.load("/fail-detect_acss/runs/torch/Isaac-Lift-Franka-v3/25-09-24_09-05-09-341960_PPO(pickandplace,needrewardshaping)/checkpoints/best_agent.pt")
 
 
 
