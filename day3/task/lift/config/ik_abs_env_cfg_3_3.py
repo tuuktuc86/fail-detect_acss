@@ -36,8 +36,8 @@ class FrankaYCBPickPlaceEnvCfg(joint_pos_env_cfg_3_3.FrankaYCBPickPlaceEnvCfg):
             body_name="panda_hand",             # IK 기준 바디(엔드이펙터)
             controller=DifferentialIKControllerCfg(
                 command_type="pose",            # pose 명령 타입
-                use_relative_mode=False,        # 절대좌표로 명령
-                ik_method="dls"                 # damped least squares IK 방법 사용
+                use_relative_mode=False,        # 절대좌표로 명령 만약 자 ㄹ안되면 여기를 True 바꿔보렴
+                ik_method="dls"                 # damped least squares IK 방법 사용 
             ),
             body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(
                 pos=[0.0, 0.0, 0.107]           # 엔드이펙터와 tcp 오프셋 (z축 방향)

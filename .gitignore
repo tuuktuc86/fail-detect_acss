@@ -10,7 +10,7 @@ output_data/*
 Pointnet_Pointnet2_pytorch/
 failure_case/*
 success_traj/*
-
+runs/*
 # Model files
 *.ckpt
 *.pth
@@ -23,6 +23,7 @@ success_traj/*
 *.npz
 *.npy
 *.png
+*.pkl
 
 # Temporary and cache files
 *.tmp
@@ -80,3 +81,9 @@ wheels/
 
 # PyTorch Lightning
 lightning_logs/
+
+
+!/scripts/model/model_pca_front_view.pkl
+!/scripts/model/model_pca_top_view.pkl
+!/scripts/model/model_pca_wrist_view.pkl
+!/cgnet/inference_cgnet.py

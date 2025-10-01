@@ -16,7 +16,7 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors.camera.camera_cfg import CameraCfg
+# from isaaclab.sensors.camera.camera_cfg import CameraCfg
 from isaaclab.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg, UsdFileCfg
 from isaaclab.utils import configclass
@@ -44,7 +44,7 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
     # 로봇, end-effector 센서, 카메라는 Agent 환경 config에서 채워짐 (MISSING)
     robot: ArticulationCfg = MISSING
     ee_frame: FrameTransformerCfg = MISSING
-    camera: CameraCfg = MISSING
+    # camera: CameraCfg = MISSING
 
     # 테이블 오브젝트 (기본 환경 오브젝트)
     table: AssetBaseCfg = AssetBaseCfg(
@@ -96,13 +96,13 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
         """환경 생성 후 자동으로 실행되는 추가 세팅 코드"""
 
         # YCB object들 전체 읽어오기
-        ycb_obj_usd_paths = glob.glob('data/assets/ycb_usd/ycb/024_bowl/final.usd')
-
+        ycb_obj_usd_paths = glob.glob('data/assets/ycb_usd/ycb/077_rubiks_cube/final.usd')
+        print(ycb_obj_usd_paths)
         # YCB object 중 3가지 물체 random하게 설정
         selected_ycb_obj_usd_paths = random.sample(ycb_obj_usd_paths, 1)
-
+        
         # YCB object 놓을 위치 지정(카메라 view에 맞게)
-        objects_position = [[0.4, 0.0, 0.6],
+        objects_position = [[0.4, 0.0, 0.51],
                             [0.48, -0.15, 0.6],
                             [0.4, -0.3, 0.6]]
 
@@ -111,8 +111,9 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
 
             # 지정된 위치에서 일정 거리 내에 random하게 위치 재설정 (0.05 이내)
             # 물체가 안겹치게 생성되도록 z위치를 조금씩 다르게 설정하는 것이 좋음
-            random_position = [objects_position[i][0] + random.random() * 0.05, 
-                               objects_position[i][1] + random.random() * 0.03, 
+            #  근데 난 바꿈
+            random_position = [objects_position[i][0] + random.random() * 0.00, 
+                               objects_position[i][1] + random.random() * 0.00, 
                                objects_position[i][2] + 0.05 * i]
             
             # YCB object 경로를 절대 경로로 설정
@@ -151,11 +152,36 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
 
 
 """ MDP 세팅 (명령어, 액션, 관측, 보상, 이벤트 등) """
-
 @configclass
 class CommandsCfg:
     """MDP에 사용되는 명령어(command) 정의"""
-
+    # object_pose = mdp.UniformPoseCommandCfg(
+    #     asset_name="object_0",
+    #     body_name="object_0",
+    #     resampling_time_range=(5.0, 5.0),
+    #     debug_vis=False,
+    #     ranges=mdp.UniformPoseCommandCfg.Ranges(
+    #         pos_x=(0.2, 0.2), pos_y=(0.6, 0.6), pos_z=(0.80, 0.9), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0) 
+    #     ),
+    # )
+    object_pose = mdp.UniformPoseCommandCfg(
+        asset_name="robot",
+        body_name=MISSING,  # will be set by agent env cfg
+        resampling_time_range=(5.0, 5.0),
+        debug_vis=True,
+        ranges=mdp.UniformPoseCommandCfg.Ranges(
+            pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.25, 0.5), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0)
+        ),
+    )
+    bin_pose = mdp.UniformPoseCommandCfg(
+        asset_name="bin",
+        body_name="bin",
+        resampling_time_range=(5.0, 5.0),
+        debug_vis=False,
+        ranges=mdp.UniformPoseCommandCfg.Ranges(
+            pos_x=(0.20000, 0.20000), pos_y=(0.6000, 0.6000), pos_z=(0.5699, 0.5699), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0) 
+        ),
+    )
 
 @configclass
 class ActionsCfg:
@@ -176,9 +202,8 @@ class ObservationsCfg:
         joint_pos = ObsTerm(func=mdp_3_1.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp_3_1.joint_vel_rel)
         object_position = ObsTerm(func=mdp_3_1.object_position_in_robot_root_frame)
-        # target_object_position = ObsTerm(func=mdp_3_1.generated_commands, params={"command_name": "object_pose"})
+        target_object_position = ObsTerm(func=mdp_3_1.generated_commands, params={"command_name": "object_pose"})
         actions = ObsTerm(func=mdp_3_1.last_action)
-
         def __post_init__(self):
             self.enable_corruption = True
             self.concatenate_terms = True
@@ -191,24 +216,106 @@ class ObservationsCfg:
 class EventCfg:
     """이벤트(event) 처리에 대한 설정"""
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
+    
+    reset_object_position = EventTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {"x": (-0.1, 0.1), "y": (-0.25, 0.25), "z": (0.05, 0.05)},
+            "velocity_range": {},
+            "asset_cfg": SceneEntityCfg("object_0", body_names="Object_0"),
+        },
+    )
+# @configclass
+# class RewardsCfg:
+#     """보상(reward) 항목 설정 - 강화학습 개발시 필요"""
+#     reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=2.0)
+#     #lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.6}, weight=2.0)
+#     object_goal_tracking = RewTerm(
+#         func=mdp.object_goal_distance,
+#         params={"std": 0.3, "minimal_height": 0.6, "command_name": "object_pose"},
+#         weight=3.0,
+#     )
+#     fixed_bin = RewTerm(
+#         func=mdp.fixed_bin,
+#         params={"std": 0.3, "command_name": "bin_pose"},
+#         weight=-10.0,
+#     )
+#     release = RewTerm(
+#         func=mdp.release,
+#         params={"std": 0.3, "minimal_height": 0.6, "command_name": "bin_pose"},
+#         weight=5.0,
+#     )
 
-
+#     goal = RewTerm(
+#         func=mdp.object_in_bin_without_ee_near_bin_sparse,
+#         weight=50.0,
+#     )
+#     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
+#     # print("action_rate = {action_rate}")
+#     joint_vel = RewTerm(
+#         func=mdp.joint_vel_l2,
+#         weight=-1e-4,
+#         params={"asset_cfg": SceneEntityCfg("robot")},
+#     )
 @configclass
 class RewardsCfg:
-    """보상(reward) 항목 설정 - 강화학습 개발시 필요"""
+    """Reward terms for the MDP."""
 
+    reaching_object = RewTerm(func=mdp.object_ee_distance, params={"std": 0.1}, weight=1.0)
+
+    lifting_object = RewTerm(func=mdp.object_is_lifted, params={"minimal_height": 0.04}, weight=15.0)
+
+    object_goal_tracking = RewTerm(
+        func=mdp.object_goal_distance,
+        params={"std": 0.3, "minimal_height": 0.04, "command_name": "object_pose"},
+        weight=16.0,
+    )
+
+    object_goal_tracking_fine_grained = RewTerm(
+        func=mdp.object_goal_distance,
+        params={"std": 0.05, "minimal_height": 0.04, "command_name": "object_pose"},
+        weight=5.0,
+    )
+
+    # object_vel_constrain = RewTerm(
+    #     func=mdp.object_vel_constrain,
+    #     params={"std": 0.05, "minimal_height": 0.04, "command_name": "object_pose"},
+    #     weight=5.0,
+    # )
+
+    # action penalty
+    action_rate = RewTerm(func=mdp.action_rate_l2, weight=-1e-4)
+
+    joint_vel = RewTerm(
+        func=mdp.joint_vel_l2,
+        weight=-1e-4,
+        params={"asset_cfg": SceneEntityCfg("robot")},
+    )
 
 @configclass
 class TerminationsCfg:
     """에피소드 종료 조건(termination) 설정"""
     # 모든 물체가 원하는 지점에 들어왔을때, 에피소드 종료
-    object_reach_goal = DoneTerm(func=mdp.object_pickplace_goal)
+    # object_reach_goal = DoneTerm(func=mdp.object_reached_goal)
+    # time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
+    time_out = DoneTerm(func=mdp.time_out, time_out=True)
+
+    object_dropping = DoneTerm(
+        func=mdp.root_height_below_minimum, params={"minimum_height": -0.05, "asset_cfg": SceneEntityCfg("object_0")}
+    )
+    
 
 @configclass
 class CurriculumCfg:
     """커리큘럼(curriculum) 보상 가중치 변경 등"""
-
+    action_rate = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "action_rate", "weight": -1e-1, "num_steps": 10000}
+    )
+    joint_vel = CurrTerm(
+        func=mdp.modify_reward_weight, params={"term_name": "joint_vel", "weight": -1e-1, "num_steps": 10000}
+    )
 
 """ 최종 환경 config """
 @configclass
@@ -223,8 +330,8 @@ class YCBPickPlaceEnvCfg(ManagerBasedRLEnvCfg):
     actions: ActionsCfg = ActionsCfg()
     observations: ObservationsCfg = ObservationsCfg()
     rewards: RewardsCfg = RewardsCfg()
-    # commands: CommandsCfg = CommandsCfg()  # 필요시 사용
-    # curriculum: CurriculumCfg = CurriculumCfg()  # 필요시 사용
+    commands: CommandsCfg = CommandsCfg()  # 필요시 사용
+    curriculum: CurriculumCfg = CurriculumCfg()  # 필요시 사용
 
     def __post_init__(self):
         """환경 생성 후 추가 세팅"""

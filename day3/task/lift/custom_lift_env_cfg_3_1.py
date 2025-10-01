@@ -18,7 +18,6 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors.camera.camera_cfg import CameraCfg
 from isaaclab.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg, UsdFileCfg
 from isaaclab.utils import configclass
@@ -48,7 +47,6 @@ class ObjectTableSceneCfg(InteractiveSceneCfg):
 
     # 로봇, end-effector 센서, 카메라는 Agent 환경 config에서 채워짐 (MISSING)
     robot: ArticulationCfg = MISSING
-    camera: CameraCfg = MISSING
 
     # grasp 대상 오브젝트
     object_0: RigidObjectCfg | DeformableObjectCfg = MISSING
